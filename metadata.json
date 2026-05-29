@@ -1,0 +1,6 @@
+{
+  "name": "Berber Randevu Gemini",
+  "description": "Yapay zeka asistanı destekli, WhatsApp entegrasyonlu akıllı berber ve kuaför randevu yönetim sistemi.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
