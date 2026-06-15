@@ -1,0 +1,33 @@
+---
+description: Bekleyen manuel güvenlik aksiyonları
+alwaysApply: true
+---
+
+# ⚠️ MANUEL YAPILMASI GEREKEN GÜVENLİK AKSIYONU
+
+## 🔴 Ngrok Token İptal Edilmedi!
+
+`ngrok_kodlar` dosyasındaki token hâlâ aktif olabilir.
+
+**Hemen şu adımları uygula:**
+
+1. https://dashboard.ngrok.com adresine git
+2. Sol menüden **Authtokens** seçeneğine tıkla
+3. Listede gördüğün token'ı **Revoke** ile iptal et
+
+Bu yapılmadan sistem tam anlamıyla güvende değil.
+
+---
+
+## ✅ Tamamlanan Güvenlik Düzeltmeleri (15 Haziran 2026)
+
+- `jws_secret` dosyası silindi
+- JWT secret artık zorunlu ve min 32 karakter
+- Helmet.js eklendi
+- CORS kısıtlandı
+- Rate limiting eklendi
+- Webhook imza doğrulaması eklendi
+- Ownership check eklendi
+- Demo şifre env'e taşındı
+
+Bu notu ngrok token'ı iptal ettikten sonra silebilirsin.
