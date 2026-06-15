@@ -14,8 +14,8 @@ router.post('/register', async (req, res, next) => {
     if (!name || !phone || !password) {
       return res.status(400).json({ error: 'name, phone ve password zorunlu' });
     }
-    if (password.length < 6) {
-      return res.status(400).json({ error: 'Şifre en az 6 karakter olmalı' });
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Şifre en az 8 karakter olmalı' });
     }
 
     const result = await authService.register({ name, phone, email, password, role });

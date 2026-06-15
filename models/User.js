@@ -26,6 +26,7 @@ const userSchema = new mongoose.Schema({
   },
   passwordHash: {
     type: String,
+    select: false,
   },
   // Berber için özel alanlar
   businessName: {

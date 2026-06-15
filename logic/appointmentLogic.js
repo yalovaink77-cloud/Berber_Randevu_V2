@@ -201,11 +201,20 @@ class AppointmentLogic {
         throw new Error('Berber bulunamadi');
       }
 
+      // İstenen gün berber çalışıyor mu?
+      if (barber.workDays) {
+        const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        const dayName = dayNames[new Date(date).getDay()];
+        if (barber.workDays[dayName] === false) {
+          return []; // O gün çalışmıyor
+        }
+      }
+
       const appointments = await DatabaseService.getAvailableSlots(barberId, date);
 
-      // Çalışma saatlerini al
-      const businessStart = process.env.BUSINESS_HOURS_START || 10;
-      const businessEnd = process.env.BUSINESS_HOURS_END || 20;
+      // Berber profilindeki çalışma saatlerini kullan; yoksa env'e, yoksa varsayılana bak
+      const businessStart = barber.workHours?.start ?? Number(process.env.BUSINESS_HOURS_START ?? 9);
+      const businessEnd   = barber.workHours?.end   ?? Number(process.env.BUSINESS_HOURS_END   ?? 20);
 
       const slots = [];
       const dayStart = new Date(date);

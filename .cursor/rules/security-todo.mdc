@@ -1,33 +1,29 @@
 ---
-description: Bekleyen manuel güvenlik aksiyonları
+description: Production öncesi güvenlik kontrol listesi
 alwaysApply: true
 ---
 
-# ⚠️ MANUEL YAPILMASI GEREKEN GÜVENLİK AKSIYONU
+# Production Güvenlik Kontrol Listesi
 
-## 🔴 Ngrok Token İptal Edilmedi!
+## Yayına almadan önce (manuel)
 
-`ngrok_kodlar` dosyasındaki token hâlâ aktif olabilir.
+1. `.env` production değerleri: `NODE_ENV=production`, güçlü `JWT_SECRET` (32+ karakter)
+2. `ALLOWED_ORIGINS` → gerçek domain (localhost olmamalı)
+3. `META_APP_SECRET`, `META_ACCESS_TOKEN`, `META_VERIFY_TOKEN` doldurulmuş olmalı
+4. `ALLOW_BARBER_REGISTRATION=false`
+5. `DEMO_BARBER_*` production'da kullanılmamalı (`ENABLE_DEMO_SEED` ayarlama)
+6. MongoDB erişilebilir ve yedekleniyor olmalı
+7. HTTPS (Nginx + Let's Encrypt) aktif olmalı
 
-**Hemen şu adımları uygula:**
+## Yerel dosyalar (repoda olmamalı)
 
-1. https://dashboard.ngrok.com adresine git
-2. Sol menüden **Authtokens** seçeneğine tıkla
-3. Listede gördüğün token'ı **Revoke** ile iptal et
+- `.env` — gitignore'da ✓
+- `ngrok_kodlar` — varsa sil (ngrok kullanmıyorsan token riski yok ama dosyayı kaldır)
 
-Bu yapılmadan sistem tam anlamıyla güvende değil.
+## Kodda uygulanan korumalar
 
----
-
-## ✅ Tamamlanan Güvenlik Düzeltmeleri (15 Haziran 2026)
-
-- `jws_secret` dosyası silindi
-- JWT secret artık zorunlu ve min 32 karakter
-- Helmet.js eklendi
-- CORS kısıtlandı
-- Rate limiting eklendi
-- Webhook imza doğrulaması eklendi
-- Ownership check eklendi
-- Demo şifre env'e taşındı
-
-Bu notu ngrok token'ı iptal ettikten sonra silebilirsin.
+- Helmet, CORS whitelist, rate limiting
+- JWT min 32 karakter, bcrypt 12 round
+- Webhook imza doğrulaması (production zorunlu)
+- Randevu/hizmet ownership + rol kontrolleri
+- Production'da mock DB devre dışı, demo seed kapalı

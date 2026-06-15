@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ahmet Yılmaz — Hikâye Testi</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b0a09;--surface:#141311;--border:#24211a;--gold:#d4af37;--text:#eae4d9;--muted:#8c8374;--wa:#075e54;--wa-light:#dcf8c6;--wa-user:#005c4b;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;}
+.wrap{max-width:900px;margin:0 auto;padding:24px;}
+h1{font-family:'Playfair Display',serif;color:var(--gold);font-size:28px;margin-bottom:4px;}
+.sub{color:var(--muted);font-size:13px;margin-bottom:24px;}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+@media(max-width:700px){.grid{grid-template-columns:1fr;}}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px;}
+.panel h2{font-size:13px;text-transform:uppercase;letter-spacing:1.5px;color:var(--gold);margin-bottom:16px;}
+.chat{background:#0a1014;border-radius:8px;min-height:320px;max-height:420px;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;}
+.bubble{max-width:85%;padding:10px 14px;border-radius:12px;font-size:14px;line-height:1.5;animation:fade .3s;}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.bubble.user{align-self:flex-end;background:var(--wa-user);color:#fff;border-bottom-right-radius:4px;}
+.bubble.bot{align-self:flex-start;background:#1f2c34;color:#e9edef;border-bottom-left-radius:4px;}
+.bubble.narrator{align-self:center;background:rgba(212,175,55,.08);color:var(--muted);font-size:12px;font-style:italic;text-align:center;max-width:95%;}
+.bubble .who{font-size:10px;opacity:.7;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;}
+.btn{padding:12px 20px;background:var(--gold);color:#0b0a09;border:none;border-radius:4px;font-weight:700;font-size:12px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;width:100%;margin-top:12px;}
+.btn:hover{filter:brightness(1.1);}
+.btn:disabled{opacity:.4;cursor:not-allowed;}
+.btn.secondary{background:transparent;border:1px solid var(--border);color:var(--text);}
+.log{font-family:monospace;font-size:12px;color:var(--muted);line-height:1.8;max-height:200px;overflow-y:auto;}
+.log .ok{color:#5cb85c}.log .err{color:#d9534f}
+.status{padding:10px 14px;border-radius:4px;font-size:13px;margin-bottom:16px;}
+.status.wait{background:rgba(212,175,55,.1);border:1px solid var(--gold);color:var(--gold);}
+.status.ok{background:rgba(92,184,92,.1);border:1px solid #5cb85c;color:#5cb85c;}
+.status.err{background:rgba(217,83,79,.1);border:1px solid #d9534f;color:#d9534f;}
+a{color:var(--gold);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>💈 Ahmet Yılmaz Hikâye Testi</h1>
+  <p class="sub">Yalova · Gökhan Erkek Kuaförü · WhatsApp randevu akışı</p>
+
+  <div id="status" class="status wait">Sunucuya bağlanılıyor…</div>
+
+  <div class="grid">
+    <div class="panel">
+      <h2>📱 WhatsApp — Ahmet'in telefonu</h2>
+      <div id="chat" class="chat"></div>
+      <button class="btn" id="btn-next" disabled>Sonraki adım →</button>
+      <button class="btn secondary" id="btn-reset" style="margin-top:8px">Baştan başla</button>
+    </div>
+    <div class="panel">
+      <h2>📋 Sistem günlüğü</h2>
+      <div id="log" class="log"></div>
+      <h2 style="margin-top:20px">👤 Test bilgileri</h2>
+      <div class="log" style="margin-top:8px">
+        Ahmet: +905051234567<br>
+        Berber: +905551112233<br>
+        Panel: <a href="/" target="_blank">localhost:3000</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '';
+const AHMET = { name: 'Ahmet Yılmaz', phone: '+905051234567', customerId: 'demo-+905051234567' };
+const BARBER = { phone: '+905551112233', password: 'DemoPass123!' };
+
+let token = null, barberId = null, step = 0, running = false;
+// Oturum: gerçek slot listesi ve müşteriye sunulan saatler
+let sessionDate = '';
+let availableSlots = [];
+let offeredTimes = []; // ['09:00', '17:00'] — sadece gerçek boş slotlardan
+
+const chat = document.getElementById('chat');
+const logEl = document.getElementById('log');
+const statusEl = document.getElementById('status');
+const btnNext = document.getElementById('btn-next');
+
+function tomorrowYmd() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function slotLabel(slot) {
+  return new Date(slot.start).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+}
+
+function parseTimeFromText(text) {
+  const m = text.match(/(\d{1,2})[:.]?(\d{2})?/);
+  if (!m) return null;
+  const h = parseInt(m[1], 10);
+  const min = m[2] ? parseInt(m[2], 10) : 0;
+  return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+}
+
+function findSlotByTime(slots, timeStr) {
+  return slots.find(s => slotLabel(s) === timeStr);
+}
+
+/** Boş slotlardan müşteriye sunulacak 2 farklı saat seç */
+function pickTwoOfferings(slots) {
+  if (slots.length === 0) return [];
+  if (slots.length === 1) return [slotLabel(slots[0])];
+  const first = slotLabel(slots[0]);
+  const mid = slots[Math.floor(slots.length / 2)];
+  const last = slotLabel(slots[slots.length - 1]);
+  const second = slotLabel(mid) !== first ? slotLabel(mid) : (last !== first ? last : slotLabel(slots[1]));
+  return [first, second];
+}
+
+async function loadAvailableSlots() {
+  sessionDate = tomorrowYmd();
+  const res = await api('GET',
+    `/api/appointments/barber/${barberId}/available-slots?date=${sessionDate}&duration=30`);
+  availableSlots = res.data.slots || [];
+  offeredTimes = pickTwoOfferings(availableSlots);
+  return availableSlots;
+}
+
+function addBubble(who, text, type = 'bot') {
+  const div = document.createElement('div');
+  div.className = 'bubble ' + (type === 'user' ? 'user' : type === 'narrator' ? 'narrator' : 'bot');
+  div.innerHTML = (type !== 'narrator' ? `<div class="who">${who}</div>` : '') + text.replace(/\n/g, '<br>');
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function log(msg, cls = '') {
+  const p = document.createElement('div');
+  p.className = cls;
+  p.textContent = `[${new Date().toLocaleTimeString('tr-TR')}] ${msg}`;
+  logEl.appendChild(p);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function setStatus(msg, type = 'wait') {
+  statusEl.className = 'status ' + type;
+  statusEl.textContent = msg;
+}
+
+async function api(method, path, body) {
+  const res = await fetch(`${API}${path}`, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  return { status: res.status, data };
+}
+
+const STEPS = [
+  {
+    title: 'Sahne 1 — Ahmet mesaj atıyor',
+    async run() {
+      addBubble('Anlatıcı', 'Akşamüstü. Ahmet telefonu eline alıyor…', 'narrator');
+      await delay(800);
+      addBubble('Ahmet Yılmaz', 'Selam, yarın saç kesimi randevusu alabilir miyim?', 'user');
+      log('WhatsApp mesajı gönderildi', 'ok');
+
+      await loadAvailableSlots();
+      log(`Yarın (${sessionDate}): ${availableSlots.length} boş slot`, 'ok');
+
+      if (offeredTimes.length === 0) {
+        addBubble('Gökhan Asistanı', 'Ahmet Bey, yarın maalesef tüm saatler dolu. Başka bir gün deneyelim mi?', 'bot');
+        log('Yarın boş slot yok', 'err');
+        return;
+      }
+
+      const offerText = offeredTimes.length === 1
+        ? offeredTimes[0]
+        : `${offeredTimes[0]} veya ${offeredTimes[1]}`;
+      addBubble('Gökhan Asistanı',
+        `Merhaba Ahmet Bey! Yarın (${sessionDate}) için müsait saatlerimiz: ${offerText}. Hangisi size uyar?`, 'bot');
+      log(`Sunulan saatler (gerçek boş): ${offeredTimes.join(', ')}`, 'ok');
+      log(`14:00 boş mu: ${findSlotByTime(availableSlots, '14:00') ? 'EVET' : 'HAYIR — dolu'}`, findSlotByTime(availableSlots, '14:00') ? 'ok' : '');
+    },
+  },
+  {
+    title: 'Sahne 2 — Ahmet 14:00 diyor (önerilmeyen saat)',
+    async run() {
+      await delay(600);
+      addBubble('Ahmet Yılmaz', '14:00 uyar, olur.', 'user');
+      log('Ahmet istedi: 14:00 (asistan 9 ve 17 önermişti)', '');
+
+      const slot14 = findSlotByTime(availableSlots, '14:00');
+      if (slot14) {
+        addBubble('Gökhan Asistanı', 'Tamam Ahmet Bey, 14:00 sizin için ayarlıyorum…', 'bot');
+        log('14:00 aslında boş — onaylanabilir', 'ok');
+      } else {
+        const alt = offeredTimes.join(' veya ');
+        addBubble('Gökhan Asistanı',
+          `Ahmet Bey, saat 14:00 maalesef dolu. Size önerdiğim ${alt} saatlerinden birini seçebilir misiniz?`, 'bot');
+        log('DOĞRU DAVRANIŞ: dolu saat reddedildi, sunulan alternatifler tekrarlandı', 'ok');
+      }
+    },
+  },
+  {
+    title: 'Sahne 3 — Ahmet sunulan saatlerden birini seçiyor',
+    async run() {
+      const pick = offeredTimes[0]; // Ahmet sonunda önerilen saatlerden birini kabul ediyor
+      await delay(600);
+      addBubble('Ahmet Yılmaz', `${pick} olsun, teşekkürler.`, 'user');
+      log(`Ahmet kabul etti: ${pick}`, 'ok');
+
+      const slot = findSlotByTime(availableSlots, pick);
+      if (!slot) {
+        addBubble('Gökhan Asistanı', `${pick} artık dolu görünüyor, lütfen başka saat seçin.`, 'bot');
+        log('Seçilen slot artık yok', 'err');
+        return;
+      }
+
+      const start = new Date(slot.start);
+      const apptDate = `${sessionDate}T${String(start.getHours()).padStart(2,'0')}:${String(start.getMinutes()).padStart(2,'0')}:00`;
+      const create = await api('POST', '/api/appointments', {
+        customerId: AHMET.customerId,
+        customerName: AHMET.name,
+        customerPhone: AHMET.phone,
+        barberId,
+        barberName: 'Gökhan Berber',
+        serviceType: 'haircut',
+        appointmentDate: apptDate,
+        duration: 30,
+        price: 250,
+        notes: 'Hikâye testi — müşteri onaylı saat',
+      });
+
+      if (create.status === 201) {
+        const d = new Date(create.data.appointment.appointmentDate);
+        addBubble('Gökhan Asistanı',
+          `Randevunuz alındı! ${d.toLocaleDateString('tr-TR')} saat ${d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })} — Gökhan Berber. Teşekkürler Ahmet Bey.`, 'bot');
+        log(`Randevu oluşturuldu: ${pick}`, 'ok');
+      } else {
+        addBubble('Gökhan Asistanı', create.data.error || 'Randevu oluşturulamadı, lütfen başka saat deneyin.', 'bot');
+        log('Randevu hatası: ' + (create.data.error || create.status), 'err');
+      }
+    },
+  },
+  {
+    title: 'Sahne 4 — Gökhan panelinde görünüyor mu?',
+    async run() {
+      addBubble('Anlatıcı', 'Gökhan paneli açıldığında takvimde yeni kutu belirir…', 'narrator');
+      const appts = await api('GET', `/api/appointments/barber/${barberId}`);
+      const ahmetAppts = (appts.data || []).filter(a => a.customerPhone === AHMET.phone);
+      log(`Takvimde ${ahmetAppts.length} Ahmet Yılmaz randevusu`, 'ok');
+      ahmetAppts.slice(-3).forEach(a => {
+        const d = new Date(a.appointmentDate);
+        log(`  → ${d.toLocaleDateString('tr-TR')} ${d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })} [${a.status}]`, 'ok');
+      });
+      setStatus('✓ Test tamamlandı — asistan dolu saati reddetti, boş saati onayladı', 'ok');
+      btnNext.textContent = 'Bitti ✓';
+      btnNext.disabled = true;
+    },
+  },
+];
+
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function runStep() {
+  if (running || step >= STEPS.length) return;
+  running = true;
+  btnNext.disabled = true;
+  setStatus(`Adım ${step + 1}/${STEPS.length}: ${STEPS[step].title}`, 'wait');
+  try {
+    await STEPS[step].run();
+    step++;
+    if (step < STEPS.length) {
+      btnNext.disabled = false;
+      btnNext.textContent = `Sonraki adım (${step + 1}/${STEPS.length}) →`;
+      setStatus(`Adım ${step}/${STEPS.length} için hazır — "Sonraki adım"a tıkla`, 'wait');
+    }
+  } catch (e) {
+    log('Hata: ' + e.message, 'err');
+    setStatus('Hata: ' + e.message, 'err');
+    btnNext.disabled = false;
+  }
+  running = false;
+}
+
+async function init() {
+  chat.innerHTML = '';
+  logEl.innerHTML = '';
+  step = 0;
+  btnNext.textContent = 'Sonraki adım (1/4) →';
+  btnNext.disabled = true;
+
+  const health = await fetch(`${API}/health`).then(r => r.ok).catch(() => false);
+  if (!health) {
+    setStatus('Sunucu çalışmıyor! Terminalde: npm start', 'err');
+    log('localhost:3000 yanıt vermiyor', 'err');
+    return;
+  }
+  log('Sunucu OK (/health)', 'ok');
+
+  const login = await api('POST', '/api/auth/login', {
+    phone: BARBER.phone, password: BARBER.password,
+  });
+  if (!login.data.token) {
+    setStatus('Berber girişi başarısız — .env DEMO_BARBER_PASSWORD kontrol et', 'err');
+    log('Login hatası: ' + (login.data.error || ''), 'err');
+    return;
+  }
+  token = login.data.token;
+  barberId = login.data.user.id;
+  log('Gökhan Berber olarak giriş yapıldı', 'ok');
+  setStatus('Hazır — "Sonraki adım" ile Ahmet hikâyesini başlat', 'ok');
+  btnNext.disabled = false;
+  addBubble('Anlatıcı', 'Test başlamak için aşağıdaki "Sonraki adım" butonuna tıkla.', 'narrator');
+}
+
+btnNext.onclick = runStep;
+document.getElementById('btn-reset').onclick = init;
+init();
+</script>
+</body>
+</html>

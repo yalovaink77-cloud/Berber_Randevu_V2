@@ -4,10 +4,21 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const appointmentRoutes = require('./dashboard/routes');
+const serviceRoutes = require('./dashboard/serviceRoutes');
 const authRoutes = require('./dashboard/authRoutes');
 const assistantRoutes = require('./dashboard/assistantRoutes');
 const path = require('path');
 const { authenticate } = require('./middleware/auth');
+
+// Production ortam kontrolleri
+if (process.env.NODE_ENV === 'production') {
+  if (!process.env.META_APP_SECRET) {
+    throw new Error('META_APP_SECRET tanımlı değil. Production ortamında webhook imza doğrulaması zorunludur.');
+  }
+  if (!process.env.ALLOWED_ORIGINS || process.env.ALLOWED_ORIGINS.includes('localhost')) {
+    throw new Error('Production\'da ALLOWED_ORIGINS gerçek domain olmalı (localhost içermemeli).');
+  }
+}
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -57,7 +68,7 @@ app.use(generalLimiter);
 // ─── Routes ───────────────────────────────────────────────────────────────
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/appointments', authenticate, appointmentRoutes);
-app.use('/api/services', authenticate, appointmentRoutes);
+app.use('/api/services', authenticate, serviceRoutes);
 app.use('/api/assistant', authenticate, assistantRoutes);
 
 // ─── WhatsApp Webhook ─────────────────────────────────────────────────────
@@ -88,7 +99,9 @@ app.post('/webhook/whatsapp', express.raw({ type: 'application/json' }), async (
         .createHmac('sha256', process.env.META_APP_SECRET)
         .update(req.body)
         .digest('hex');
-      if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSig))) {
+      const sigBuf = Buffer.from(signature);
+      const expBuf = Buffer.from(expectedSig);
+      if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
         return res.status(403).send('Invalid signature');
       }
     } else if (process.env.META_APP_SECRET && !signature) {

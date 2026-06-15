@@ -1,0 +1,42 @@
+version: '3.9'
+
+services:
+  app:
+    build: .
+    container_name: berber-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://mongo:27017/berber_randevu
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - berber-net
+
+  mongo:
+    image: mongo:7-jammy
+    container_name: berber-mongo
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - berber-net
+    # MongoDB'ye dışarıdan erişim kapalı (sadece app erişir)
+
+volumes:
+  mongo_data:
+
+networks:
+  berber-net:
+    driver: bridge

@@ -12,12 +12,16 @@ if (!mongoose.connection.readyState) {
   })
     .then(() => {
       console.log('✅ MongoDB bağlantısı başarılı');
-      // Gerçek MongoDB boş olabilir; demo berber ve hizmetlerin
-      // var olduğundan emin ol ki giriş ekranı her zaman çalışsın.
-      ensureSeedData();
+      if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEMO_SEED === 'true') {
+        ensureSeedData();
+      }
     })
     .catch((err) => {
       console.error('❌ MongoDB bağlantı hatası:', err.message);
+      if (process.env.NODE_ENV === 'production') {
+        console.error('❌ Production ortamında MongoDB zorunludur. Sunucu mock moda geçmeyecek.');
+        process.exit(1);
+      }
       console.warn('ℹ️ Uygulama in-memory mock veritabanı modunda çalışmaya devam ediyor.');
     });
 }
@@ -49,7 +53,10 @@ async function ensureSeedData() {
     const demoBarberId = 'test-barber-id';
     let barber = await User.findOne({ phone: demoPhone });
     if (!barber) {
-      const demoPassword = process.env.DEMO_BARBER_PASSWORD || process.env.JWT_SECRET?.slice(0, 16) || 'DemoPass_degistir!';
+      const demoPassword = process.env.DEMO_BARBER_PASSWORD;
+      if (!demoPassword || demoPassword.length < 8) {
+        throw new Error('DEMO_BARBER_PASSWORD tanımlı değil veya 8 karakterden kısa. .env dosyanızı kontrol edin.');
+      }
       barber = await User.create({
         id: demoBarberId,
         name: 'Gökhan Berber',
@@ -64,7 +71,7 @@ async function ensureSeedData() {
         workDays: { monday: true, tuesday: true, wednesday: true, thursday: true, friday: true, saturday: true, sunday: false },
         workHours: { start: 9, end: 20 },
       });
-      console.log('✅ Demo berber kullanıcısı eklendi (giriş: +905551112233 / 123456)');
+      console.log(`✅ Demo berber kullanıcısı eklendi (giriş: ${demoPhone} / DEMO_BARBER_PASSWORD)`);
     }
 
     // 3) Demo berber için bugüne ait örnek randevular (yalnızca hiç yoksa)

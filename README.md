@@ -1,288 +1,217 @@
-# Berber Randevu Sistemi 📅✂️
+# Berber Randevu Sistemi
 
-Meta WhatsApp Cloud API, Meta AI (Llama) ve MongoDB kullanarak geliştirilmiş tam işlevli berber randevu yönetim sistemi.
+WhatsApp üzerinden AI destekli randevu alma ve berber yönetim paneli.
 
-## 🎯 Özellikler
+## Özellikler
 
-### Temel Fonksiyonlar
-✅ **Randevu Yönetimi**
-- Yeni randevu oluştur
-- Randevu düzenle ve iptal et
-- Çakışma kontrolü (iki randevu aynı anda olamaz)
-- Berber takvimi ve günlük program
+- **WhatsApp Bot** — Müşteriler WhatsApp'tan mesaj atarak randevu alır; AI (Gemini / Meta Llama / Claude) doğal dil isteğini analiz eder
+- **Berber Paneli** — Web tabanlı yönetim: randevular, hizmetler, müşteri rehberi, kaçan aramalar
+- **JWT Kimlik Doğrulama** — Berber ve müşteri rolleri; güvenli oturum
+- **Çakışma Kontrolü** — Aynı saatte çift randevu engellenir
+- **Müsait Saat Hesabı** — Berberin çalışma günleri ve saatlerine göre
+- **Güvenlik** — Helmet, CORS whitelist, rate limiting, webhook imza doğrulaması
 
-✅ **WhatsApp Bildirimleri (Meta Cloud API)**
-- Randevu onayı mesajı
-- İnteraktif konuşma ile randevu alma
-- Randevu iptal bildirisi
-- Berber'e müşteri bildirimi
+---
 
-✅ **Yapay Zeka Entegrasyonu (Meta AI + Claude fallback)**
-- Müşteri talebini otomatik analiz et
-- Randevu kayıtlarından özet oluştur
-- Planlama önerileri
-- Geri bildirim analizi
+## Hızlı Başlangıç
 
-✅ **Veri Yönetimi (MongoDB)**
-- Kullanıcı profilleri (berber ve müşteri)
-- Randevu kayıtları
-- Hizmet geçmişi
-- İş analitikleri
+### Gereksinimler
 
-## 📁 Proje Yapısı
+- Node.js 20+
+- MongoDB (yerel veya Atlas)
+- Meta WhatsApp Business API (opsiyonel; yoksa simülasyon modu çalışır)
+- En az bir AI sağlayıcı anahtarı (Gemini önerilir)
 
-```
-berber_randevu/
-├── index.js                    # Ana sunucu dosyası
-├── package.json                # Bağımlılıklar
-├── .env                        # Çevre değişkenleri
-├── .env.example                # Örnek .env
-│
-├── models/                     # Veri modelleri
-│   ├── User.js                # Kullanıcı (Berber/Müşteri)
-│   └── Appointment.js         # Randevu
-│
-├── services/                   # Harici servisleri
-│   ├── databaseService.js     # MongoDB işlemleri
-│   ├── whatsappService.js     # WhatsApp mesajlaşma (Meta Cloud API)
-│   ├── conversationService.js # Konuşma yönetimi
-│   └── aiService.js           # Claude AI entegrasyonu
-│
-├── logic/                      # İş mantığı
-│   └── appointmentLogic.js    # Randevu işlemleri
-│
-└── dashboard/                  # API Routes
-    └── routes.js              # REST API endpoints
-```
+### Kurulum
 
-## 🚀 Başlangıç
-
-### 1. Bağımlılıkları Yükle
 ```bash
+git clone <repo-url>
+cd berber-randevu-sistemi_V2_google_ai
 npm install
+
+cp .env.example .env
+# .env dosyasını doldurun (aşağıdaki Ortam Değişkenleri bölümüne bakın)
+
+node index.js
 ```
 
-### 2. Ortam Değişkenlerini Ayarla
-`.env` dosyasını `.env.example` dan kopyala ve API anahtarlarını gir:
-
-```bash
-# Meta WhatsApp Cloud API
-META_ACCESS_TOKEN=your_meta_access_token
-META_PHONE_NUMBER_ID=your_phone_number_id
-META_VERIFY_TOKEN=your_verify_token_123
-
-# AI Provider
-AI_PROVIDER=auto
-
-# Meta AI
-META_AI_API_KEY=your_meta_ai_api_key
-META_AI_BASE_URL=https://api.llama.com/compat/v1
-META_AI_MODEL=Llama-4-Maverick-17B-128E-Instruct
-AI_REQUEST_TIMEOUT_MS=30000
-
-# Maliyet optimizasyonu
-AI_CONVERSATION_HISTORY_LIMIT=4
-AI_HEURISTIC_REQUEST_PARSING=true
-AI_HEURISTIC_FEEDBACK_PARSING=true
-AI_SUMMARY_WITH_MODEL=false
-
-# Claude AI (opsiyonel fallback)
-CLAUDE_API_KEY=sk-ant-xxxxx
-
-# MongoDB
-MONGODB_URI=mongodb://localhost:27017/berber_randevu
-
-# Server
-PORT=3000
-NODE_ENV=development
-
-# İş Saatleri
-BUSINESS_HOURS_START=10
-BUSINESS_HOURS_END=20
-```
-
-**Meta Cloud API Kurulumu için:** [META_SETUP.md](./META_SETUP.md) dosyasına bakın.
-
-### 3. Sunucuyu Başlat
-```bash
-npm start
-```
-
-Sunucu `http://localhost:3000` de çalışmaya başlar.
-
-## 📡 API Endpoints
-
-### Randevu İşlemleri
-
-`POST /api/appointments` - Yeni randevu oluştur
-```json
-{
-  "customerId": "uuid",
-  "customerName": "Ahmet Yilmaz",
-  "customerPhone": "+905551234567",
-  "barberId": "uuid",
-  "barberName": "Mehmet",
-  "serviceType": "haircut",
-  "appointmentDate": "2024-03-15T14:30:00Z",
-  "duration": 30,
-  "notes": "Kısa kesim istiyorum",
-  "price": 150
-}
-```
-
-`GET /api/appointments/:id` - Randevu detayları al
-
-`GET /api/appointments/customer/:customerId` - Müşterinin randevuları
-
-`GET /api/appointments/barber/:barberId` - Berber'in randevuları
-
-`PUT /api/appointments/:id` - Randevuyu güncelle
-
-`DELETE /api/appointments/:id` - Randevuyu iptal et
-
-### Kullanılabilir Saatler
-
-`GET /api/appointments/barber/:barberId/available-slots?date=2024-03-15&duration=30`
-- Belirli bir gün için boş saatleri listele
-
-`GET /api/appointments/barber/:barberId/upcoming?days=7`
-- Sonraki 7 gün için yaklaşan randevuları al
-
-### Diğer
-
-`POST /api/appointments/send-reminders` - Yarın randevuları olanları hatırlat
-
-`GET /health` - Sunucu sağlık kontrolü
-
-## 🛠️ Teknik Stack
-
-| Teknoloji | Amaç |
-|-----------|------|
-| **Node.js + Express** | Web sunucusu |
-| **MongoDB + Mongoose** | Veri tabanı |
-| **Meta WhatsApp Cloud API** | WhatsApp mesajlaşma |
-| **Meta AI (Llama)** | AI konuşma ve analiz |
-| **Anthropic AI (opsiyonel)** | Fallback AI sağlayıcısı |
-| **Axios** | HTTP istekleri |
-| **dotenv** | Ortam değişkenleri |
-| **UUID** | Benzersiz ID üretimi |
-
-## 🔑 Temel Dosya Açıklamaları
-
-### `services/databaseService.js`
-Tüm MongoDB işlemlerini merkezi olarak yönetir:
-- Kullanıcı oluştur/getir/güncelle
-- Randevu CRUD işlemleri
-- Boş saatler sorgulama
-- Tarih bazlı randevu listesi
-
-### `services/whatsappService.js`
-Meta WhatsApp Cloud API ile mesajlaşma:
-- WhatsApp mesajı gönderme
-- Webhook doğrulama
-- Gelen mesajları parse etme
-- Şablon mesajları gönderme
-
-### `services/conversationService.js`
-Stateful konuşma yönetimi:
-- Çok adımlı diyalog yönetimi
-- Konuşma durumları (initial → completed)
-- Kullanıcı cevaplarını saklama
-- Randevu verilerini toplama
-
-### `services/aiService.js`
-Meta AI ile entegrasyon (Claude fallback destekli):
-- Müşteri talebini anlama ve hizmet türü tahmin etme
-- Randevu özetleri oluşturma
-- Haftalık planlama önerileri
-- Geri bildirim analizi
-
-Not: Düşük maliyet için basit talep/geri bildirimlerde yerel kural analizi devrededir. `AI_SUMMARY_WITH_MODEL=false` ise randevu özeti AI'a gitmez.
-
-### `logic/appointmentLogic.js`
-Karmaşık iş kurallarıyla çakışma kontrol:
-- Samat çakışmaları engelleme
-- Müşteri talebinden otomatik randevu oluşturma
-- Hatırlatma gönderme
-- Kullanılabilir saatleri hesaplama
-
-## 💡 Kullanım Örnekleri
-
-### Yeni Randevu Oluştur (cURL)
-```bash
-curl -X POST http://localhost:3000/api/appointments \
-  -H "Content-Type: application/json" \
-  -d '{
-    "customerId": "cust-123",
-    "customerName": "Ali Demir",
-    "customerPhone": "+905551234567",
-    "barberId": "barber-456",
-    "barberName": "Merhmet Kaya",
-    "serviceType": "haircut",
-    "appointmentDate": "2024-03-15T14:00:00Z",
-    "duration": 30,
-    "price": 150
-  }'
-```
-
-### Boş Saatleri Getir
-```bash
-curl http://localhost:3000/api/appointments/barber/barber-456/available-slots?date=2024-03-15&duration=30
-```
-
-### WhatsApp Webhook Testi
-```bash
-# Webhook doğrulama
-curl "http://localhost:3000/webhook/whatsapp?hub.mode=subscribe&hub.verify_token=your_verify_token_123&hub.challenge=TEST123"
-# Çıktı: TEST123
-```
-
-## 🧪 Test Etme
-
-### 1. Sunucunun Çalışıp Çalışmadığını Kontrol Et
-```bash
-curl http://localhost:3000/health
-# Çıktı: {"status":"OK","message":"Berber Randevu Sistemi çalışıyor"}
-```
-
-### 2. MongoDB Bağlantısını Kontrol Et
-Sunucu başlarken MongoDB bağlantı mesajını gözlemle:
-```
-✅ MongoDB bağlantısı başarılı
-🚀 Sunucu 3000 portında çalışıyor
-```
-
-## 🔒 Güvenlik Notları
-
-- `.env` dosyasını asla commit etme (`.gitignore` ye ekli)
-- API anahtarlarını güvenli bir yerde sakla
-- Production'da environment değişkenlerini kullan
-- Rate limiting ve authentication eklemek önerilir
-
-## 🚧 Gelecek Geliştirmeler
-
-- [ ] Kimlik doğrulama (JWT)
-- [ ] Web ve mobil dashboard (React/Vue)
-- [ ] Google Calendar entegrasyonu
-- [ ] Ödeme sistemi (Stripe/PayPal)
-- [ ] Müşteri puanlama ve yorumları
-- [ ] WebSocket ile gerçek zamanlı bildirimler
-- [ ] Email notifications
-- [ ] Multi-language desteği
-
-## 📞 Destek
-
-Sorularınız için proje sahibine ulaşın.
+Panel: `http://localhost:3000`
 
 ---
 
-**Geliştirme Tarihi:** 7 Mart 2026  
-**Sürüm:** 2.0.0 (Meta Cloud API)
+## Ortam Değişkenleri
+
+`.env.example` dosyasını kopyalayın ve tüm alanları doldurun:
+
+| Değişken | Zorunlu | Açıklama |
+|---|:---:|---|
+| `PORT` | — | Varsayılan: 3000 |
+| `NODE_ENV` | — | `development` \| `production` |
+| `ALLOWED_ORIGINS` | ✓ | CORS whitelist (virgülle ayrılmış) |
+| `MONGODB_URI` | ✓ | MongoDB bağlantı URI |
+| `JWT_SECRET` | ✓ | En az 32 karakter rastgele string |
+| `JWT_EXPIRES_IN` | — | Varsayılan: `7d` |
+| `GEMINI_API_KEY` | * | Google Gemini API anahtarı |
+| `META_AI_API_KEY` | * | Meta Llama API anahtarı |
+| `CLAUDE_API_KEY` | * | Anthropic Claude API anahtarı |
+| `META_ACCESS_TOKEN` | * | WhatsApp Cloud API token |
+| `META_PHONE_NUMBER_ID` | * | WhatsApp telefon numarası ID |
+| `META_VERIFY_TOKEN` | * | Webhook doğrulama token'ı |
+| `META_APP_SECRET` | ✓ (prod) | Webhook imza doğrulaması için — production'da zorunlu |
+| `ALLOW_BARBER_REGISTRATION` | — | Varsayılan: `false` |
+| `BUSINESS_HOURS_START` | — | Varsayılan: 9 (berber profil ayarı öncelikli) |
+| `BUSINESS_HOURS_END` | — | Varsayılan: 20 |
+| `DEMO_BARBER_PHONE` | ✓ | Demo berber telefonu |
+| `DEMO_BARBER_PASSWORD` | ✓ | Demo berber şifresi (en az 8 karakter) |
+
+> \* En az bir AI anahtarı ve en az bir WhatsApp anahtarı gereklidir. WhatsApp anahtarı yoksa simülasyon modu devreye girer.
+
+JWT_SECRET üretmek için:
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
 
 ---
 
-## 📚 Ek Belgeler
+## API Uç Noktaları
 
-- [META_SETUP.md](./META_SETUP.md) - Meta WhatsApp Cloud API kurulum rehberi
-- [MIGRATION.md](./MIGRATION.md) - Twilio'dan Meta'ya geçiş detayları
-- [QUICKSTART.md](./QUICKSTART.md) - Hızlı başlangıç kılavuzu
+### Auth — `/api/auth`
+
+| Metod | Yol | Açıklama |
+|---|---|---|
+| POST | `/register` | Kullanıcı kaydı |
+| POST | `/login` | Giriş → JWT döner |
+| GET | `/me` | Token sahibinin profili |
+
+### Randevular — `/api/appointments` (JWT zorunlu)
+
+| Metod | Yol | Yetki |
+|---|---|---|
+| POST | `/` | Herhangi giriş yapmış |
+| GET | `/:id` | İlgili taraf veya berber |
+| PUT | `/:id` | İlgili taraf veya berber |
+| DELETE | `/:id` | İlgili taraf veya berber |
+| GET | `/customer/:customerId` | Kendisi veya berber |
+| GET | `/barber/:barberId` | Yalnızca o berber |
+| GET | `/barber/:barberId/upcoming` | Yalnızca o berber |
+| GET | `/barber/:barberId/available-slots?date=YYYY-MM-DD` | Herhangi giriş yapmış |
+
+### Hizmetler — `/api/services` (JWT zorunlu)
+
+| Metod | Yol | Yetki |
+|---|---|---|
+| GET | `/list` | Herhangi giriş yapmış |
+| POST | `/create` | Yalnızca berber |
+| PUT | `/update/:id` | Yalnızca berber |
+| DELETE | `/delete/:id` | Yalnızca berber |
+
+### Asistan — `/api/assistant` (JWT + berber zorunlu)
+
+| Metod | Yol | Açıklama |
+|---|---|---|
+| GET | `/profile` | Berber profili |
+| PUT | `/profile` | Profil güncelle |
+| GET | `/contacts` | Müşteri rehberi |
+| GET | `/missed-calls` | Kaçan aramalar |
+| POST | `/simulate` | WhatsApp simülasyonu |
+
+### Webhook
+
+| Metod | Yol | Açıklama |
+|---|---|---|
+| GET | `/webhook/whatsapp` | Meta doğrulama challenge |
+| POST | `/webhook/whatsapp` | Gelen mesajlar (imza doğrulamalı) |
+
+### Health
+
+```
+GET /health → { status: "OK", timestamp: "..." }
+```
+
+---
+
+## Deployment
+
+### Docker (Önerilen)
+
+```bash
+# .env dosyasını oluşturun ve doldurun
+cp .env.example .env
+
+# Başlat
+docker compose up -d
+
+# Loglar
+docker compose logs -f app
+```
+
+### PM2 (VPS/Bare Metal)
+
+```bash
+npm install -g pm2
+
+# Production başlat
+pm2 start ecosystem.config.js --env production
+
+# Sistem açılışında otomatik başlat
+pm2 startup
+pm2 save
+```
+
+### Nginx
+
+`nginx/nginx.conf` dosyasını düzenleyip `YOUR_DOMAIN.com` alanını değiştirin:
+
+```bash
+sudo cp nginx/nginx.conf /etc/nginx/sites-available/berber-randevu
+sudo ln -s /etc/nginx/sites-available/berber-randevu /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+
+# SSL (Certbot)
+sudo certbot --nginx -d YOUR_DOMAIN.com
+```
+
+---
+
+## WhatsApp Kurulumu
+
+`META_SETUP.md` dosyasına bakın. Webhook URL'si:
+
+```
+https://YOUR_DOMAIN.com/webhook/whatsapp
+```
+
+---
+
+## Proje Yapısı
+
+```
+├── index.js                  # Express sunucu + middleware
+├── dashboard/
+│   ├── routes.js             # Randevu API
+│   ├── serviceRoutes.js      # Hizmet API
+│   ├── authRoutes.js         # Auth API
+│   ├── assistantRoutes.js    # Asistan API
+│   └── public/index.html     # Berber yönetim paneli (vanilla JS)
+├── logic/
+│   └── appointmentLogic.js   # Randevu iş kuralları
+├── models/                   # Mongoose şemaları
+├── services/                 # AI, WhatsApp, auth, veritabanı servisleri
+├── middleware/auth.js         # JWT + rol middleware
+├── data/                     # Seed verileri
+├── Dockerfile
+├── docker-compose.yml
+├── ecosystem.config.js        # PM2
+└── nginx/nginx.conf           # Nginx örnek config
+```
+
+---
+
+## Güvenlik Notları
+
+- `JWT_SECRET` en az 32 karakter rastgele değer olmalı
+- Production'da `META_APP_SECRET` zorunludur — sunucu başlamaz
+- `ALLOW_BARBER_REGISTRATION=false` production için önerilir
+- Berber şifreleri bcrypt 12 round ile hashlenir
+- Rate limiting: auth 20 istek/15dk, genel 120 istek/dk
+- Tüm randevu ve hizmet endpoint'leri JWT korumalı

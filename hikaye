@@ -1,0 +1,92 @@
+Saat Dokuzda Açılan Kapı
+Yalova’nın Atatürk Caddesi’nde, numarası 77 olan bir dükkân vardı. Camın üstünde “Gökhan Erkek Kuaförü” yazardı. İçeride makas sesi, fön makinesinin uğultusu ve bir adamın sessizce odaklandığı o tanıdık berber havası vardı.
+
+Gökhan o sabah dükkânı açtığında telefonu çaldı. Müşteri. Kaçırdı — elinde tıraş makinesi, birinin ensesinde duruyordu. Telefon sustu. Birkaç saniye sonra ekranda bir bildirim belirdi:
+
+Merhaba, şu an müşterimle ilgileniyorum. Randevu almak için WhatsApp üzerinden gün ve işlem bilgisini yazabilirsiniz; uygun saatleri hemen paylaşacağım.
+
+Bu mesajı Gökhan yazmadı. Yazdıran, dükkanın görünmeyen ortağıydı: berber randevu sistemi.
+
+Görünmeyen Ortak
+Bu proje bir yazılım değil, bir köprü gibi düşünülebilir.
+
+Bir ucunda Gökhan var — çalışma günlerini belirleyen, hizmetlerini tanımlayan, panelden randevularına bakan, “bugün çalışıyorum” diyen berber.
+
+Diğer ucunda Ahmet, Mehmet, Caner… WhatsApp’tan “Yarın öğleden sonra saç kestirmek istiyorum” yazan insanlar.
+
+Arada ise sessiz bir asistan duruyor. Gemini, Meta Llama veya Claude — hangisi müsaitse o konuşuyor. Ama müşteri bunu fark etmiyor. O sadece Gökhan’ın dükkanıyla konuştuğunu sanıyor.
+
+Ahmet’in Mesajı
+Ahmet Yılmaz o gün telefonu eline aldı ve yazdı:
+
+Selam, yarın saç kesimi randevusu alabilir miyim?
+
+Sunucu, port 3000’de uyanıktı. Mesaj webhook’tan geçti — imzası doğrulandı, kapı açıldı. conversationService Ahmet’in numarasını tanıdı: daha önce gelmişti. Rehberde kayıtlıydı.
+
+Asistan düşündü. Gökhan’ın profilinde Pazartesi–Cumartesi açık, Pazar kapalı. Çalışma saatleri 09:00–20:00. Takvimde Mehmet’in pending randevusu vardı; Caner’inki confirmed. Boş slotlar hesaplandı — çakışma kontrolü devreye girdi.
+
+Birkaç saniye sonra Ahmet cevap aldı:
+
+Merhaba Ahmet Bey! Yarın için müsait saatlerimiz var. 14:00 veya 16:30 size uygun mu?
+
+Ahmet “14:00” yazdı.
+
+Sistem randevuyu oluşturdu. MongoDB’ye bir satır düştü. WhatsApp’a onay mesajı gitti. Gökhan’ın panelinde, o an henüz bakmasa bile, takvimde yeni bir kutu belirdi.
+
+Ahmet telefonu cebine koydu. Berbere gitmiş gibi hissetti. Oysa Gökhan hâlâ bir müşterinin saçını kesiyordu.
+
+Gökhan Paneli Açtığında
+Öğle arasında Gökhan bilgisayarı açtı: localhost:3000.
+
+Giriş yaptı — telefon, şifre, JWT token. Karşısında koyu temalı bir panel vardı:
+
+Randevu takvimi — Ahmet, Mehmet, Caner; confirmed, pending
+Hizmetler — saç kesimi, sakal, boyama… 48 hizmet
+WhatsApp simülatörü — gerçek numara olmadan asistanı denemek için
+Rehber — otomatik dolan müşteri kayıtları
+Kaçan aramalar — cevapsız çağrıların izi
+Gökhan profiline baktı: Atatürk Cad. No:77, Merkez, Yalova. Asistan durumu: working. “Müşterimle ilgileniyorum” modu.
+
+Bir hizmet fiyatını güncelledi — sadece berber yapabilirdi; müşteri hesabıyla denense 403 dönerdi. Sistem bunu biliyordu.
+
+Bilinmeyen Numara
+Akşamüstü yeni bir numara aradı. Gökhan yine kaçırdı.
+
+Rehberde yoktu. Randevu geçmişi de yoktu. callAssistantService karar verdi: Kayıtsız numara.
+
+Asistan yine devreye girdi — ama bu sefer daha temkinli bir tonla:
+
+Merhaba, şu an çalışıyorum. Randevu almak veya not bırakmak için WhatsApp üzerinden yazabilirsiniz; müsait olunca dönüş yapacağım.
+
+Numara kaydedildi. Bir dahaki sefer “tanıdık” statüsüne yaklaşacaktı.
+
+Sistemin Hafızası
+Her müşterinin bir oturumu vardı — sessions içinde, adım adım:
+
+step: 'greeting' → 'collecting_date' → 'confirming' ...
+Konuşma geçmişi tutuluyordu. AI son dört mesaja bakarak cevap veriyordu. Müşteri adını öğrendiyse rehbere yazıyordu: “WhatsApp Randevu Asistanı ile otomatik kaydedildi.”
+
+Randevu oluşunca çakışma kontrolü çalışıyordu — aynı saatte iki kişi oturamazdı. İptal edilince WhatsApp mesajı gidiyordu: “Randevunuz iptal edildi…”
+
+Gece, Sunucu Uyanık
+Saat 21:00’de Gökhan dükkânı kapattı. Makaslar raflaştı. Ama sunucu uyumadı.
+
+Helmet başlıkları koruyordu. Rate limiter birinin 15 dakikada 20’den fazla giriş denemesini durduruyordu. JWT secret 32 karakterden kısa olsaydı hiç açılmazdı. Production’da Meta imzası olmadan webhook kapısı açılmazdı.
+
+MongoDB’de randevular duruyordu. Demo berber, demo randevular, gerçek veriler — hepsi aynı evde.
+
+Hikâyenin Özü
+Bu proje bir berber dükkanının dijital nöbetçisi.
+
+Gökhan makas tutarken sistem konuşuyor.
+Müşteri WhatsApp yazarken sistem dinliyor.
+Randevu alınırken sistem hesaplıyor.
+Berber paneli açıldığında sistem susuyor — çünkü artık sıra insandadır.
+
+Ve belki de en güzel kısmı şu: Ahmet sadece “randevu aldım” der. Arka planda Express, MongoDB, JWT, Gemini, webhook imzası, çakışma algoritması ve Gökhan’ın Pazar günü kapalı olduğu bilgisi bir arada çalışır. Ahmet bunların hiçbirini bilmez.
+
+O sadece yarın saat 14:00’te gelir.
+
+Makas sesi duyar.
+
+Ve hikâye devam eder.

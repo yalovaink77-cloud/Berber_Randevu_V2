@@ -77,7 +77,7 @@ async function login({ phone, password }) {
   const normPhone = normalizePhoneNumber(phone);
 
   // Mongoose modeli üzerinden sorgula (hook'lar ve middleware devrede kalır)
-  const user = await User.findOne({ phone: normPhone });
+  const user = await User.findOne({ phone: normPhone }).select('+passwordHash');
   if (!user || !user.passwordHash) {
     const err = new Error('Telefon numarası veya şifre hatalı');
     err.status = 401;
