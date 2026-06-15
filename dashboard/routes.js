@@ -3,6 +3,39 @@ const router = express.Router();
 const AppointmentLogic = require('../logic/appointmentLogic');
 const DatabaseService = require('../services/databaseService');
 
+// Yalnızca randevunun sahibi (müşteri) veya berber erişebilir
+async function requireAppointmentAccess(req, res, next) {
+  try {
+    const appointment = await DatabaseService.getAppointmentById(req.params.id);
+    if (!appointment) return res.status(404).json({ error: 'Randevu bulunamadı' });
+
+    const userId = req.user?.id;
+    const userRole = req.user?.role;
+
+    if (
+      userRole === 'barber' ||
+      appointment.customerId === userId ||
+      appointment.barberId === userId
+    ) {
+      req.appointment = appointment;
+      return next();
+    }
+
+    return res.status(403).json({ error: 'Bu randevuya erişim yetkiniz yok' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// Müşteri yalnızca kendi verilerine erişebilir; berber herkese erişebilir
+function requireSelfOrBarber(paramKey = 'customerId') {
+  return (req, res, next) => {
+    if (req.user?.role === 'barber') return next();
+    if (req.user?.id === req.params[paramKey]) return next();
+    return res.status(403).json({ error: 'Yalnızca kendi verilerinize erişebilirsiniz' });
+  };
+}
+
 // ===== APPOINTMENT ENDPOINTS =====
 
 /**
@@ -56,27 +89,17 @@ router.post('/', async (req, res, next) => {
 
 /**
  * GET /api/appointments/:id
- * Randevu detaylarını getir
+ * Randevu detaylarını getir — yalnızca ilgili taraflar
  */
-router.get('/:id', async (req, res, next) => {
-  try {
-    const appointment = await DatabaseService.getAppointmentById(req.params.id);
-
-    if (!appointment) {
-      return res.status(404).json({ error: 'Randevu bulunamadı' });
-    }
-
-    res.json(appointment);
-  } catch (error) {
-    next(error);
-  }
+router.get('/:id', requireAppointmentAccess, async (req, res) => {
+  res.json(req.appointment);
 });
 
 /**
  * GET /api/appointments/customer/:customerId
- * Müşterinin randevularını listele
+ * Müşterinin randevularını listele — yalnızca kendisi veya berber
  */
-router.get('/customer/:customerId', async (req, res, next) => {
+router.get('/customer/:customerId', requireSelfOrBarber('customerId'), async (req, res, next) => {
   try {
     const appointments = await DatabaseService.getAppointmentsByCustomer(req.params.customerId);
     res.json(appointments);
@@ -100,9 +123,9 @@ router.get('/barber/:barberId', async (req, res, next) => {
 
 /**
  * PUT /api/appointments/:id
- * Randevuyu güncelle
+ * Randevuyu güncelle — yalnızca ilgili taraflar
  */
-router.put('/:id', async (req, res, next) => {
+router.put('/:id', requireAppointmentAccess, async (req, res, next) => {
   try {
     const {
       serviceType,
@@ -134,9 +157,9 @@ router.put('/:id', async (req, res, next) => {
 
 /**
  * DELETE /api/appointments/:id
- * Randevuyu iptal et
+ * Randevuyu iptal et — yalnızca ilgili taraflar
  */
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', requireAppointmentAccess, async (req, res, next) => {
   try {
     await AppointmentLogic.cancelAppointment(req.params.id);
 

@@ -45,17 +45,18 @@ async function ensureSeedData() {
     }
 
     // 2) Demo berber kullanıcısı
-    const demoPhone = '+905551112233';
+    const demoPhone = process.env.DEMO_BARBER_PHONE || '+905551112233';
     const demoBarberId = 'test-barber-id';
     let barber = await User.findOne({ phone: demoPhone });
     if (!barber) {
+      const demoPassword = process.env.DEMO_BARBER_PASSWORD || process.env.JWT_SECRET?.slice(0, 16) || 'DemoPass_degistir!';
       barber = await User.create({
         id: demoBarberId,
         name: 'Gökhan Berber',
         phone: demoPhone,
         email: 'gokhan@berber.com',
         role: 'barber',
-        passwordHash: bcrypt.hashSync('123456', 10),
+        passwordHash: bcrypt.hashSync(demoPassword, 12),
         businessName: 'Gökhan Erkek Kuaförü',
         businessAddress: 'Atatürk Cad. No:77, Merkez, Yalova',
         assistantStatus: 'working',

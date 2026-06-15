@@ -1,6 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const appointmentRoutes = require('./dashboard/routes');
 const authRoutes = require('./dashboard/authRoutes');
 const assistantRoutes = require('./dashboard/assistantRoutes');
@@ -8,17 +10,57 @@ const path = require('path');
 const { authenticate } = require('./middleware/auth');
 
 const app = express();
-const PORT = 3000;
+const PORT = parseInt(process.env.PORT || '3000', 10);
 
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname, "dashboard/public")));
+// ─── Güvenlik başlıkları ───────────────────────────────────────────────────
+app.use(helmet({
+  contentSecurityPolicy: false, // Dashboard inline script kullanıyor, gerekirse açılabilir
+}));
 
-app.use('/api/auth', authRoutes);
-app.use('/api/services', authenticate, appointmentRoutes);
+// ─── CORS ─────────────────────────────────────────────────────────────────
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000,http://localhost:5173')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // curl / Postman gibi origin'siz isteklere sadece geliştirmede izin ver
+    if (!origin && process.env.NODE_ENV !== 'production') return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error(`CORS: ${origin} adresine izin verilmiyor`));
+  },
+  credentials: true,
+}));
+
+app.use(express.json({ limit: '2mb' }));
+app.use(express.static(path.join(__dirname, 'dashboard/public')));
+
+// ─── Rate Limiting ─────────────────────────────────────────────────────────
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 dakika
+  max: 20,                   // maks 20 istek
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Çok fazla istek gönderildi, lütfen 15 dakika sonra tekrar deneyin.' },
+});
+
+const generalLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 dakika
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use(generalLimiter);
+
+// ─── Routes ───────────────────────────────────────────────────────────────
+app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/appointments', authenticate, appointmentRoutes);
+app.use('/api/services', authenticate, appointmentRoutes);
 app.use('/api/assistant', authenticate, assistantRoutes);
-// WhatsApp Webhook
+
+// ─── WhatsApp Webhook ─────────────────────────────────────────────────────
 const whatsappService = require('./services/whatsappService');
 const conversationService = require('./services/conversationService');
 
@@ -35,11 +77,28 @@ app.get('/webhook/whatsapp', (req, res) => {
   }
 });
 
-// Gelen mesajları karşıla
-app.post('/webhook/whatsapp', async (req, res) => {
+// Gelen mesajları karşıla — imza doğrulamalı
+app.post('/webhook/whatsapp', express.raw({ type: 'application/json' }), async (req, res) => {
   try {
+    // Meta webhook imza doğrulaması (X-Hub-Signature-256)
+    const signature = req.headers['x-hub-signature-256'];
+    if (process.env.META_APP_SECRET && signature) {
+      const crypto = require('crypto');
+      const expectedSig = 'sha256=' + crypto
+        .createHmac('sha256', process.env.META_APP_SECRET)
+        .update(req.body)
+        .digest('hex');
+      if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSig))) {
+        return res.status(403).send('Invalid signature');
+      }
+    } else if (process.env.META_APP_SECRET && !signature) {
+      return res.status(403).send('Missing signature');
+    }
+
     res.status(200).send('OK');
-    const message = whatsappService.parseIncomingMessage(req.body);
+
+    const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    const message = whatsappService.parseIncomingMessage(body);
     if (!message || message.type !== 'text') return;
     await conversationService.handleMessage(message.from, message.text);
   } catch (error) {
@@ -47,20 +106,33 @@ app.post('/webhook/whatsapp', async (req, res) => {
   }
 });
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'OK', message: 'Berber Randevu Sistemi çalışıyor' });
+// ─── Health check ─────────────────────────────────────────────────────────
+app.get('/health', (_req, res) => {
+  res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
+// ─── Global hata yakalayıcı ───────────────────────────────────────────────
 app.use((err, req, res, next) => {
-  console.error('Hata:', err);
+  console.error(`[${new Date().toISOString()}] ${req.method} ${req.path} →`, err.message);
+
+  // CORS hatasını kullanıcıya göster ama iç detayları gizle
+  if (err.message?.startsWith('CORS:')) {
+    return res.status(403).json({ error: 'Bu kaynaktan erişim yasak' });
+  }
+
   res.status(err.status || 500).json({
-    error: err.message || 'İç sunucu hatası',
+    error: process.env.NODE_ENV === 'production'
+      ? 'Sunucu hatası'
+      : (err.message || 'İç sunucu hatası'),
   });
 });
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Sunucu ${PORT} portunda çalışıyor`);
   console.log(`📍 http://localhost:${PORT}`);
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`🔓 CORS izinli origin'ler: ${allowedOrigins.join(', ')}`);
+  }
 });
 
 module.exports = app;

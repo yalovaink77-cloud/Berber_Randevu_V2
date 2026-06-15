@@ -3,13 +3,21 @@ const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 const User = require('../models/User');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'degistir_bunu_production_da';
+const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 const VALID_ROLES = ['barber', 'customer'];
 
-if (process.env.NODE_ENV === 'production' && JWT_SECRET === 'degistir_bunu_production_da') {
-  throw new Error('Production ortamında JWT_SECRET zorunludur');
+// JWT_SECRET zorunlu — her ortamda
+if (!JWT_SECRET || JWT_SECRET.length < 32) {
+  throw new Error(
+    'JWT_SECRET tanımlı değil veya çok kısa (en az 32 karakter). ' +
+    '.env dosyanızı kontrol edin.'
+  );
 }
+
+// Barber kaydına ortam kontrolü
+const ALLOW_BARBER_REGISTRATION =
+  String(process.env.ALLOW_BARBER_REGISTRATION || 'false').toLowerCase() === 'true';
 
 function normalizePhoneNumber(phone) {
   if (!phone) return '';
@@ -25,59 +33,71 @@ function normalizePhoneNumber(phone) {
 }
 
 async function register({ name, phone, email, password, role = 'customer' }) {
-  const normPhone = normalizePhoneNumber(phone);
   if (!VALID_ROLES.includes(role)) {
     const err = new Error('Geçersiz kullanıcı rolü');
     err.status = 400;
     throw err;
   }
 
-  if (
-    role === 'barber' &&
-    process.env.NODE_ENV === 'production' &&
-    String(process.env.ALLOW_BARBER_REGISTRATION || 'false').toLowerCase() !== 'true'
-  ) {
-    const err = new Error('Berber kaydı production ortamında kapalı');
+  if (role === 'barber' && !ALLOW_BARBER_REGISTRATION) {
+    const err = new Error('Berber kaydı şu an kapalı');
     err.status = 403;
     throw err;
   }
 
+  if (!password || password.length < 8) {
+    const err = new Error('Şifre en az 8 karakter olmalı');
+    err.status = 400;
+    throw err;
+  }
+
+  const normPhone = normalizePhoneNumber(phone);
   const existing = await User.findOne({ phone: normPhone });
   if (existing) {
     const err = new Error('Bu telefon numarası zaten kayıtlı');
     err.status = 409;
     throw err;
   }
-  const passwordHash = await bcrypt.hash(password, 10);
-  const user = await User.create({ id: uuidv4(), name, phone: normPhone, email, passwordHash, role });
+
+  const passwordHash = await bcrypt.hash(password, 12);
+  const user = await User.create({
+    id: uuidv4(),
+    name,
+    phone: normPhone,
+    email,
+    passwordHash,
+    role,
+  });
+
   const token = generateToken(user);
   return { user: sanitize(user), token };
 }
 
 async function login({ phone, password }) {
   const normPhone = normalizePhoneNumber(phone);
-  // Raw MongoDB sorgusu - Mongoose model filtrelerini bypass eder
-  const raw = await User.collection.findOne({ phone: normPhone });
-  if (!raw || !raw.passwordHash) {
+
+  // Mongoose modeli üzerinden sorgula (hook'lar ve middleware devrede kalır)
+  const user = await User.findOne({ phone: normPhone });
+  if (!user || !user.passwordHash) {
     const err = new Error('Telefon numarası veya şifre hatalı');
     err.status = 401;
     throw err;
   }
-  const valid = await bcrypt.compare(password, raw.passwordHash);
+
+  const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) {
     const err = new Error('Telefon numarası veya şifre hatalı');
     err.status = 401;
     throw err;
   }
-  const token = generateToken(raw);
-  delete raw.passwordHash;
-  delete raw.__v;
-  return { user: raw, token };
+
+  const token = generateToken(user);
+  return { user: sanitize(user), token };
 }
 
 function generateToken(user) {
   return jwt.sign(
-    { id: user.id, role: user.role, phone: user.phone },
+    { id: user.id || user._id, role: user.role, phone: user.phone },
     JWT_SECRET,
     { expiresIn: JWT_EXPIRES_IN }
   );

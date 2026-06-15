@@ -244,13 +244,14 @@ function createModelProxy(modelName, originalModel) {
 try {
   const bcrypt = require('bcryptjs');
   const barberId = "test-barber-id";
-  const passwordHash = bcrypt.hashSync('123456', 10);
+  const demoPassword = process.env.DEMO_BARBER_PASSWORD || process.env.JWT_SECRET?.slice(0, 16) || 'DemoPass_degistir!';
+  const passwordHash = bcrypt.hashSync(demoPassword, 10);
 
   store.User.set(barberId, {
     id: barberId,
     _id: barberId,
     name: "Gökhan Berber",
-    phone: "+905551112233",
+    phone: process.env.DEMO_BARBER_PHONE || "+905551112233",
     email: "gokhan@berber.com",
     role: "barber",
     passwordHash: passwordHash,
