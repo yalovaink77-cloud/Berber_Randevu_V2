@@ -58,7 +58,14 @@ class ConversationService {
         if (!response.appointment.barberId) {
           response.appointment.barberId = barberId;
         }
+        // appointmentDate yoksa data.date+time'dan oluştur
+        if (response.appointment && !response.appointment.appointmentDate && response.data?.date && response.data?.time) {
+          response.appointment.appointmentDate = new Date(`${response.data.date}T${response.data.time}:00`).toISOString();
+        }
         await AppointmentLogic.createAppointment(response.appointment);
+        session.step = "greeting";
+        session.data = {};
+        session.history = [];
       }
 
       // Müşteri adını otomatik öğren/kaydet veya güncelle (Rehber uyumu için)

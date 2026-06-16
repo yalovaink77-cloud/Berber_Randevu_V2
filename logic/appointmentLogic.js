@@ -60,7 +60,7 @@ class AppointmentLogic {
         const date = new Date(appointment.appointmentDate);
         const dateStr = date.toLocaleDateString('tr-TR');
         const timeStr = date.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-        const message = `Merhaba ${appointment.customerName}!\n\nRandevunuz alindi\nBerber: ${appointment.barberName}\nTarih: ${dateStr}\nSaat: ${timeStr}\n\nTesekkur ederiz!`;
+        const message = `Merhaba ${appointment.customerName}!\n\nRandevunuz alındı\nBerber: ${appointment.barberName}\nTarih: ${dateStr}\nSaat: ${timeStr}\n\nTeşekkür ederiz!`;
         await WhatsAppService.sendMessage(appointmentData.customerPhone, message);
       } catch (error) {
         console.error('WhatsApp onay mesaji gonderilemedi:', error.message);

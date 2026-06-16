@@ -101,25 +101,26 @@ class AIService {
   }
 
   extractJsonResponse(responseText, fallbackValue) {
-    if (!responseText || typeof responseText !== 'string') {
-      return fallbackValue;
-    }
-
-    try {
-      return JSON.parse(responseText);
-    } catch (error) {
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        try {
-          return JSON.parse(jsonMatch[0]);
-        } catch (jsonError) {
-          return fallbackValue;
-        }
-      }
-    }
-
+  if (!responseText || typeof responseText !== 'string') {
     return fallbackValue;
   }
+  // Önce ```json ... ``` bloğunu temizle
+  const stripped = responseText.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
+  try {
+    return JSON.parse(stripped);
+  } catch (e1) {
+    // Direkt parse olmadıysa JSON objesini bul
+    const jsonMatch = stripped.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        return JSON.parse(jsonMatch[0]);
+      } catch (e2) {
+        return fallbackValue;
+      }
+    }
+  }
+  return fallbackValue;
+}
 
   formatDateAsYmd(date) {
     const year = date.getFullYear();
@@ -275,10 +276,10 @@ class AIService {
     }
 
     return {
-      message:
-        typeof parsed.message === 'string' && parsed.message.trim()
-          ? parsed.message.trim()
-          : fallbackMessage,
+      message: (() => {
+        const raw = typeof parsed.message === 'string' ? parsed.message.trim() : fallbackMessage;
+        return raw.replace(/```json[\s\S]*?```/g, '').replace(/\{[\s\S]*\}/g, '').trim() || fallbackMessage;
+      })(),
       nextStep:
         typeof parsed.nextStep === 'string' && parsed.nextStep.trim()
           ? parsed.nextStep.trim()
@@ -703,6 +704,24 @@ JSON formatında cevap ver:
       }).join('\n') || 'Hiç dolu randevu yok, tüm çalışma saatleri boş.';
 
       const customerName = customer ? customer.name : (session.data?.name || 'Değerli Müşteri');
+      const extractSalutation = (name) => {
+        if (!name) return null;
+        const lower = name.toLowerCase();
+        if (lower.includes(" abi") || lower.endsWith("abi")) return name;
+        if (lower.includes(" amca") || lower.endsWith("amca")) return name;
+        if (lower.includes(" hanım") || lower.endsWith("hanım")) return name;
+        if (lower.includes(" bey") || lower.endsWith("bey")) return name;
+        if (lower.includes(" hoca") || lower.endsWith("hoca")) return name;
+        const parts = name.trim().split(" ");
+        if (parts.length >= 2) {
+          const femaleEndings = ["a","e","i","ı"];
+          const firstName = parts[0];
+          const lastChar = firstName[firstName.length - 1].toLowerCase();
+          return femaleEndings.includes(lastChar) ? `${firstName} Hanım` : `${firstName} Bey`;
+        }
+        return name;
+      };
+      const customerSalutation = isSavedContact ? extractSalutation(customerName) : null;
       const todayYmd = this.formatDateAsYmd(new Date());
 
       const systemPrompt = `Sen ${barber.name} salonunun samimi ve cana yakın WhatsApp asistanısın.
@@ -714,15 +733,14 @@ MÜŞTERİ BİLGİSİ:
 - Rehberde Kayıtlı mı?: ${isSavedContact ? 'EVET (Tanıdık/Sürekli Müşteri)' : 'HAYIR (Yeni/Bilinmeyen Müşteri)'}
 
 ÖZEL REHBER & HİTAP KURALLARI:
-1. Eğer müşteri rehberde kayıtlı ise (${isSavedContact ? 'KAYITLI' : 'DEĞİL'}):
-   - Ona rehberdeki kayıtlı ismiyle hitap et: "${customerName}".
-   - "Mümtaz Abi", "Mümtaz Amca" veya doğrudan ismi ne ise o şekilde seslen. ASLA "Mümtaz Bey" veya "Sayın Mümtaz Abi" gibi resmi kelimeler kullanma!
-   - İlk mesajında "Hoşgeldiniz, ben dijital asistanınız, randevu için falan filan" gibi robotik/kurumsal girişler yapma. Doğrudan bir mahalle berberi samimiyetiyle yaz: "Mümtaz Abim hoş geldin, seni buraya hangi gün yazalım? Saç-sakal her zamanki gibi mi?" tarzında samimi ve cana yakın ol.
-   - "Siz" kelimesini unut, "Sen" ve "Abim/Kardeşim" diye konuş.
-2. Eğer müşteri rehberde kayıtlı değilse:
-   - "Değerli Müşterimiz hoş geldiniz. Ben asistanınız." şeklinde sıcak ama kibar ve saygılı bir giriş yap.
-   - Konuşmanın başında ismini öğrenmek için kibarca sor: "Size isminizle hitap etmek isterim, adınız nedir acaba?" gibi. Adını öğrendikten sonra kesinlikle onu hatırla ve "newCustomer.name" nesnesinde gönder ki onu hemen rehbere kaydedebilelim.
-
+1. Kayıtlı müşteri (${isSavedContact ? "EVET" : "HAYIR"}):
+   - Hitap: "${customerSalutation || customerName}" — bu ismi kullan, değiştirme.
+   - "Sen" diye konuş, samimi ve sıcak ol.
+   - "Abim", "kardeşim", "abi", "bey", "hanım" gibi kelimeler EKLEME — isim zaten doğru geliyor.
+2. Kayıtsız müşteri:
+   - Her zaman "Siz" ile hitap et, saygılı ve kibar ol.
+   - İsmini öğrenince hatırla.
+   - Randevu onaylanınca newCustomer objesini doldur: {"name": "Ad Soyad", "phone": "telefon", "category": "customer"}.
 KULLANILABİLİR HİZMETLER:
 ${servicesStr}
 
@@ -732,11 +750,16 @@ ${busySlotsStr}
 GÖREVLERİN VE KURALLAR:
 1. Müşteri fiyat listesi veya hizmetleri sorursa yukarıdaki hizmetleri ve fiyatları sıcak bir dille söyle.
 2. Randevu almak isterse, yukarıdaki hizmet listesinden en uygun hizmeti teklif et veya seçtir. Sadece bizim sunduğumuz hizmetleri teklif et!
-3. SAAT ÇAKIŞMASI YÖNETİMİ (Kritik):
+3. ÇALIŞMA GÜNLERİ:
+   - Berber ise: Pazartesi-Cumartesi açık, PAZAR KAPALI.
+   - Kuaför ise: Salı-Pazar açık, PAZARTESİ KAPALI.
+   - Çalışma saatleri: ${process.env.BUSINESS_HOURS_START || 9}:00 - ${process.env.BUSINESS_HOURS_END || 20}:00
+   - Müşteri kapalı güne randevu isterse bunu bildir ve açık güne yönlendir.
+4. SAAT ÇAKIŞMASI YÖNETİMİ (Kritik):
    - Müşterinin istediği gün/saati yukarıdaki DOLU SAATLER ile titizlikle karşılaştır.
-   - Eğer müşteri ÇAKIŞAN (dolu) bir saat isterse (örn: saat 15:00 doluysa ve o saati istediyse), o saatin dolu olduğunu berber samimiyetiyle belirt ve lafı uzatmadan hemen o saate en yakın BOŞ olan 2 alternatifi (Örn: "Mümtaz abim saat 15:00 dolu ama sana 14:00 veya 17:00'yi ayarlasak uyar mı?" şeklinde) net olarak öner!
-4. Müşterinin adını, istediği hizmeti, tercih ettiği tarih ve saati netleştir.
-5. Tüm bilgiler netleştiğinde randevuyu kesinleştirerek "confirm" veya "done" adımına geç ve "appointment" objesini doldur.
+   - Eğer müşteri ÇAKIŞAN (dolu) bir saat isterse, o saatin dolu olduğunu belirt ve en yakın BOŞ olan 2 alternatifi öner.
+5. Müşterinin adını, istediği hizmeti, tercih ettiği tarih ve saati netleştir.
+6. Tüm bilgiler netleştiğinde randevuyu kesinleştirerek "confirm" veya "done" adımına geç ve "appointment" objesini doldur.
 
 ÖNEMLİ: "appointment" nesnesini sadece randevuyu kesinleştirmek üzereyken doldur ve alanların doğru olduğundan emin ol.
 Giriş Tarihi her zaman ISO formatında olmalıdır (Ör: 2026-05-29T14:30:00.000Z).
@@ -774,7 +797,7 @@ Cevabını her zaman geçerli bir JSON formatında ver:
           ...session.history.slice(-this.conversationHistoryLimit),
           { role: 'user', content: text },
         ],
-        maxTokens: 500,
+        maxTokens: 1200,
         temperature: 0.4,
       });
 
