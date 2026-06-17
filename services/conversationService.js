@@ -120,6 +120,59 @@ function resetSession(session) {
   session.pendingCancelAll = false;
 }
 
+async function buildConflictMessage(barberId, appt) {
+  const date = new Date(appt.appointmentDate);
+  const duration = appt.duration || 30;
+  const timeStr = date.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+  const dateStr = date.toLocaleDateString('tr-TR');
+
+  try {
+    const slots = await AppointmentLogic.getAvailableSlots(barberId, date, duration);
+    const alts = slots.slice(0, 3).map((s) =>
+      s.start.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+    );
+    if (alts.length) {
+      return `Üzgünüm, ${dateStr} saat ${timeStr} dolu görünüyor. Şu saatler uygun: ${alts.join(', ')}. Hangisini tercih edersiniz?`;
+    }
+    return `Üzgünüm, ${dateStr} saat ${timeStr} dolu ve o gün başka boş saat kalmamış. Farklı bir gün söylerseniz kontrol edeyim.`;
+  } catch {
+    return `Üzgünüm, ${dateStr} saat ${timeStr} dolu görünüyor. Başka bir saat veya gün önerebilir misiniz?`;
+  }
+}
+
+function parseLocalAppointmentDate(dateValue, timeValue) {
+  if (dateValue && timeValue) {
+    return new Date(`${dateValue}T${timeValue}:00`);
+  }
+  if (!dateValue) return null;
+  const raw = String(dateValue);
+  const match = raw.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/);
+  if (match) {
+    return new Date(`${match[1]}T${match[2]}:${match[3]}:00`);
+  }
+  return new Date(raw);
+}
+
+function buildAppointmentPayload(response, barberId, from) {
+  const appt = { ...response.appointment };
+  if (!appt.barberId) appt.barberId = barberId;
+  if (!appt.customerPhone) appt.customerPhone = from;
+
+  const localDate = parseLocalAppointmentDate(
+    response.data?.date,
+    response.data?.time
+  );
+  if (localDate && !Number.isNaN(localDate.getTime())) {
+    appt.appointmentDate = localDate.toISOString();
+  } else if (appt.appointmentDate) {
+    const parsed = parseLocalAppointmentDate(appt.appointmentDate);
+    if (parsed && !Number.isNaN(parsed.getTime())) {
+      appt.appointmentDate = parsed.toISOString();
+    }
+  }
+  return appt;
+}
+
 class ConversationService {
   static async handleMessage(from, text, barberId) {
     try {
@@ -232,28 +285,41 @@ class ConversationService {
         session.pendingCancelAll = false;
       }
 
-      await WhatsAppService.sendMessage(from, response.message);
+      const isFinalBooking =
+        response.nextStep === 'done' ||
+        (response.nextStep === 'confirm' && detectConfirmIntent(text));
 
       const shouldCreate =
         response.appointment &&
+        isFinalBooking &&
         !inCancelFlow &&
         !response.cancelAll &&
         !response.cancelAppointmentId &&
         !session.pendingCancelAll &&
-        safeCancelIds.length === 0 &&
-        (response.nextStep === 'done' || response.nextStep === 'confirm');
+        safeCancelIds.length === 0;
 
       if (shouldCreate) {
-        const appt = { ...response.appointment };
-        if (!appt.barberId) appt.barberId = barberId;
-        if (!appt.customerPhone) appt.customerPhone = from;
-        if (!appt.appointmentDate && response.data?.date && response.data?.time) {
-          appt.appointmentDate = new Date(`${response.data.date}T${response.data.time}:00`).toISOString();
+        const appt = buildAppointmentPayload(response, barberId, from);
+        try {
+          await AppointmentLogic.createAppointment(appt, { notify: false });
+          await WhatsAppService.sendMessage(from, response.message);
+          resetSession(session);
+          return;
+        } catch (err) {
+          const isConflict = /mesgul|meşgul|çakış|dolu/i.test(err.message);
+          const failMsg = isConflict
+            ? await buildConflictMessage(barberId, appt)
+            : 'Üzgünüm, randevu kaydedilemedi. Lütfen tarih ve saati tekrar kontrol edelim.';
+          console.error('Randevu oluşturma hatası:', err.message);
+          await WhatsAppService.sendMessage(from, failMsg);
+          session.history.push({ role: 'assistant', content: failMsg });
+          session.step = 'time';
+          session.data = { ...session.data, ...response.data };
+          return;
         }
-        await AppointmentLogic.createAppointment(appt, { notify: false });
-        resetSession(session);
-        return;
       }
+
+      await WhatsAppService.sendMessage(from, response.message);
 
       const learnedName =
         response.newCustomer?.name ||

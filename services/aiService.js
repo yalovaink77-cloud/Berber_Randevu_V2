@@ -264,6 +264,50 @@ class AIService {
     };
   }
 
+  formatCustomerPriceList(services) {
+    const items = Array.isArray(services) ? services : [];
+    const byCategory = {};
+    for (const s of items) {
+      const cat = s.category || 'diger';
+      if (!byCategory[cat]) byCategory[cat] = [];
+      byCategory[cat].push(s);
+    }
+    const catLabels = {
+      sac: '✂️ SAÇ',
+      sakal: '🧔 SAKAL',
+      komple: '💈 KOMPLE',
+      bakim: '🌿 BAKIM',
+      diger: '💈 HİZMET',
+    };
+    return Object.entries(byCategory)
+      .map(([cat, list]) => {
+        const label = catLabels[cat] || catLabels.diger;
+        const lines = list
+          .map((s) => `• ${s.name} — ${s.priceMin}-${s.priceMax} TL / ${s.defaultDuration} dk`)
+          .join('\n');
+        return `${label}\n${lines}`;
+      })
+      .join('\n\n');
+  }
+
+  ensureFullPriceList(userText, message, services) {
+    const wantsPrice = /fiyat|ücret|ucret|hizmet list|ne kadar|kaç para|fiyatlar|fiyat listesi/i.test(
+      (userText || '').toLowerCase()
+    );
+    if (!wantsPrice) return message;
+
+    const priceCount = (message.match(/TL/g) || []).length;
+    if (priceCount >= 3) return message;
+
+    const list = this.formatCustomerPriceList(services);
+    const intro = (message || '')
+      .replace(/\s*listeledim\.?\s*$/i, '')
+      .replace(/\s*yazdım\.?\s*$/i, '')
+      .trim();
+    const header = intro && intro.length > 10 ? intro : 'Tabii! İşte güncel fiyat listemiz:';
+    return `${header}\n\n${list}`;
+  }
+
   normalizeConversationResponse(parsed, fallbackStep, fallbackMessage) {
     if (!parsed || typeof parsed !== 'object') {
       return {
@@ -281,7 +325,7 @@ class AIService {
     return {
       message: (() => {
         const raw = typeof parsed.message === 'string' ? parsed.message.trim() : fallbackMessage;
-        return raw.replace(/```json[\s\S]*?```/g, '').replace(/\{[\s\S]*\}/g, '').trim() || fallbackMessage;
+        return raw.replace(/```json[\s\S]*?```/g, '').trim() || fallbackMessage;
       })(),
       nextStep:
         typeof parsed.nextStep === 'string' && parsed.nextStep.trim()
@@ -728,6 +772,35 @@ JSON formatında cevap ver:
           }).join('\n')
         : 'Aktif randevu yok.';
 
+      const targetDate =
+        session.data?.date ||
+        this.formatDateAsYmd(new Date(Date.now() + 86400000));
+      let freeSlotsStr = 'Hesaplanamadı — dolu saatler listesine bak.';
+      let slotDuration = 30;
+      if (session.data?.serviceCode) {
+        const svc = services.find((s) => s.code === session.data.serviceCode);
+        if (svc?.defaultDuration) slotDuration = svc.defaultDuration;
+      } else if (session.data?.duration) {
+        slotDuration = Number(session.data.duration) || 30;
+      }
+      try {
+        const AppointmentLogic = require('../logic/appointmentLogic');
+        const freeSlots = await AppointmentLogic.getAvailableSlots(
+          barber.id,
+          new Date(`${targetDate}T12:00:00`),
+          slotDuration
+        );
+        freeSlotsStr = freeSlots.length
+          ? freeSlots
+              .map((s) =>
+                s.start.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+              )
+              .join(', ')
+          : 'Bu gün için boş saat yok.';
+      } catch (slotErr) {
+        console.warn('Müsait slot hesaplanamadı:', slotErr.message);
+      }
+
       const customerName = customer ? customer.name : (session.data?.name || 'Değerli Müşteri');
       const extractSalutation = (name) => {
         if (!name) return null;
@@ -772,6 +845,10 @@ ${servicesStr}
 BERBERİN DOLU OLDUĞU SAATLER (ÇAKIŞMA OLMAMALI):
 ${busySlotsStr}
 
+MÜSAİT SAATLER (${targetDate}):
+${freeSlotsStr}
+- Randevu teklif ederken SADECE bu listedeki saatleri öner. Listede olmayan saati müsait diye söyleme.
+
 MÜŞTERİNİN AKTİF RANDEVULARI (telefon: ${phone || 'bilinmiyor'}):
 ${customerApptsStr}
 
@@ -785,9 +862,13 @@ GÖREVLERİN VE KURALLAR:
    - Müşteri kapalı güne randevu isterse bunu bildir ve açık güne yönlendir.
 4. SAAT ÇAKIŞMASI YÖNETİMİ (Kritik):
    - Müşterinin istediği gün/saati yukarıdaki DOLU SAATLER ile titizlikle karşılaştır.
-   - Eğer müşteri ÇAKIŞAN (dolu) bir saat isterse, o saatin dolu olduğunu belirt ve en yakın BOŞ olan 2 alternatifi öner.
+   - DOLU SAATLER listesindeki saati ASLA müsait diye önerme.
+   - MÜSAİT SAATLER listesinde OLMAYAN saati önerme.
+   - Eğer müşteri ÇAKIŞAN (dolu) bir saat isterse, o saatin dolu olduğunu belirt ve MÜSAİT SAATLER listesinden en yakın 2 alternatifi öner.
 5. Müşterinin adını, istediği hizmeti, tercih ettiği tarih ve saati netleştir.
-6. Tüm bilgiler netleştiğinde randevuyu kesinleştirerek "confirm" veya "done" adımına geç ve "appointment" objesini doldur.
+6. Tüm bilgiler netleştiğinde randevuyu kesinleştirerek "done" adımına geç ve "appointment" objesini doldur.
+   - "confirm" adımında appointment objesini BOŞ bırak; yalnızca özet göster ve onay iste.
+   - Müşteri onayladıktan sonraki cevapta nextStep="done" kullan.
 7. İPTAL İŞLEMİ:
    - Müşteri randevusunu iptal etmek isterse MÜŞTERİNİN AKTİF RANDEVULARI listesine bak.
    - Listede gösterilen ID'leri AYNEN kullan — uydurma ID yazma.
@@ -800,7 +881,7 @@ GÖREVLERİN VE KURALLAR:
 
 ÖNEMLİ: "appointment" nesnesini sadece YENİ randevu kesinleşirken doldur. İptal için cancelAppointmentId veya cancelAll kullan.
 ÖNEMLİ: Aynı mesajda hem "appointment" hem iptal alanları gönderme.
-Giriş Tarihi her zaman ISO formatında olmalıdır (Ör: 2026-05-29T14:30:00.000Z).
+Giriş Tarihi her zaman ISO formatında olmalıdır. Müşterinin söylediği saat TÜRKİYE yerel saatidir (ör. 14:00 = öğleden sonra 2). appointmentDate için UTC+3 kayması yapma; data.date ve data.time alanlarını doğru doldur.
 
 Cevabını her zaman geçerli bir JSON formatında ver:
 {
@@ -844,11 +925,13 @@ Cevabını her zaman geçerli bir JSON formatında ver:
 
       const parsed = this.extractJsonResponse(responseText, null);
       if (parsed) {
-        return this.normalizeConversationResponse(parsed, session.step, responseText);
+        const normalized = this.normalizeConversationResponse(parsed, session.step, responseText);
+        normalized.message = this.ensureFullPriceList(text, normalized.message, services);
+        return normalized;
       }
 
       return {
-        message: responseText,
+        message: this.ensureFullPriceList(text, responseText, services),
         nextStep: session.step,
         data: {},
         appointment: null,
