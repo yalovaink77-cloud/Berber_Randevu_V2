@@ -1,5 +1,27 @@
 const axios = require('axios');
 
+// AI bazen Kiril homoglifleri karıştırır (ör. randevuну → randevunu)
+const CYRILLIC_LATIN = new Map([
+  ['\u0430', 'a'], ['\u0410', 'A'],
+  ['\u0432', 'b'], ['\u0412', 'B'],
+  ['\u0435', 'e'], ['\u0415', 'E'],
+  ['\u043A', 'k'], ['\u041A', 'K'],
+  ['\u043C', 'm'], ['\u041C', 'M'],
+  ['\u043D', 'n'], ['\u041D', 'N'],
+  ['\u043E', 'o'], ['\u041E', 'O'],
+  ['\u0440', 'p'], ['\u0420', 'P'],
+  ['\u0441', 'c'], ['\u0421', 'C'],
+  ['\u0442', 't'], ['\u0422', 'T'],
+  ['\u0443', 'u'], ['\u0423', 'U'],
+  ['\u0445', 'x'], ['\u0425', 'X'],
+  ['\u0456', 'i'], ['\u0406', 'I'],
+]);
+
+function sanitizeOutboundText(text) {
+  if (!text || typeof text !== 'string') return text;
+  return [...text].map((ch) => CYRILLIC_LATIN.get(ch) || ch).join('');
+}
+
 class WhatsAppService {
   constructor() {
     this.token = process.env.META_ACCESS_TOKEN;
@@ -9,6 +31,7 @@ class WhatsAppService {
   }
 
   async sendMessage(to, text) {
+    text = sanitizeOutboundText(text);
     // Save to our in-memory simulated message store
     if (!global.simulatedChats) {
       global.simulatedChats = {};

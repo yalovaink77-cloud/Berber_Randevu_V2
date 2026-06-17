@@ -823,6 +823,7 @@ JSON formatında cevap ver:
       const todayYmd = this.formatDateAsYmd(new Date());
 
       const systemPrompt = `Sen ${barber.name} salonunun samimi ve cana yakın WhatsApp asistanısın.
+Yalnızca Türkçe Latin alfabesi kullan — Kiril veya yabancı alfabe karakteri yazma (ör. randevunu doğru yaz, randevuну yanlış).
 Bugünün Tarihi: ${todayYmd}
 Mevcut Konuşma Adımı: ${session.step}
 
