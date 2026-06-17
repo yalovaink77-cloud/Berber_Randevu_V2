@@ -271,6 +271,9 @@ class AIService {
         nextStep: fallbackStep,
         data: {},
         appointment: null,
+        cancelAppointmentId: null,
+        cancelAppointmentIds: [],
+        cancelAll: false,
         newCustomer: null,
       };
     }
@@ -286,6 +289,14 @@ class AIService {
           : fallbackStep,
       data: parsed.data && typeof parsed.data === 'object' ? parsed.data : {},
       appointment: parsed.appointment && typeof parsed.appointment === 'object' ? parsed.appointment : null,
+      cancelAppointmentId:
+        typeof parsed.cancelAppointmentId === 'string' && parsed.cancelAppointmentId.trim()
+          ? parsed.cancelAppointmentId.trim()
+          : null,
+      cancelAppointmentIds: Array.isArray(parsed.cancelAppointmentIds)
+        ? parsed.cancelAppointmentIds.filter((id) => typeof id === 'string' && id.trim()).map((id) => id.trim())
+        : [],
+      cancelAll: parsed.cancelAll === true,
       newCustomer: parsed.newCustomer && typeof parsed.newCustomer === 'object' ? parsed.newCustomer : null,
     };
   }
@@ -681,7 +692,7 @@ JSON formatında cevap ver:
     }
   }
 
-  async generateConversationResponse(text, session, customer, isSavedContact = false) {
+  async generateConversationResponse(text, session, customer, isSavedContact = false, customerPhone = '') {
     try {
       const DatabaseService = require('./databaseService');
       const Service = require('../models/Service');
@@ -702,6 +713,20 @@ JSON formatında cevap ver:
         const dateStr = d.toLocaleDateString('tr-TR');
         return `- ${dateStr} günü saat ${startStr} - ${endStr} arası DOLU (${b.customerName})`;
       }).join('\n') || 'Hiç dolu randevu yok, tüm çalışma saatleri boş.';
+
+      const phone = customerPhone || customer?.phone || '';
+      const customerAppointments = phone
+        ? await DatabaseService.getUpcomingAppointmentsByPhone(barber.id, phone)
+        : [];
+      const customerApptsStr = customerAppointments.length
+        ? customerAppointments.map((a) => {
+            const d = new Date(a.appointmentDate);
+            const dateStr = d.toLocaleDateString('tr-TR');
+            const timeStr = d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+            const apptId = a.id || (a._id ? String(a._id) : 'bilinmiyor');
+            return `- ID: ${apptId} | ${dateStr} ${timeStr} | ${a.serviceType} | durum: ${a.status}`;
+          }).join('\n')
+        : 'Aktif randevu yok.';
 
       const customerName = customer ? customer.name : (session.data?.name || 'Değerli Müşteri');
       const extractSalutation = (name) => {
@@ -747,8 +772,11 @@ ${servicesStr}
 BERBERİN DOLU OLDUĞU SAATLER (ÇAKIŞMA OLMAMALI):
 ${busySlotsStr}
 
+MÜŞTERİNİN AKTİF RANDEVULARI (telefon: ${phone || 'bilinmiyor'}):
+${customerApptsStr}
+
 GÖREVLERİN VE KURALLAR:
-1. Müşteri fiyat listesi veya hizmetleri sorursa yukarıdaki hizmetleri ve fiyatları sıcak bir dille söyle.
+1. Müşteri fiyat listesi veya hizmetleri sorarsa, KULLANILABİLİR HİZMETLER listesindeki TÜM hizmetleri ve fiyatlarını mesajına MUTLAKA ekle — asla "yukarıda" veya "az önce gönderdim" deme, her seferinde tam listeyi yeniden yaz.
 2. Randevu almak isterse, yukarıdaki hizmet listesinden en uygun hizmeti teklif et veya seçtir. Sadece bizim sunduğumuz hizmetleri teklif et!
 3. ÇALIŞMA GÜNLERİ:
    - Berber ise: Pazartesi-Cumartesi açık, PAZAR KAPALI.
@@ -760,20 +788,33 @@ GÖREVLERİN VE KURALLAR:
    - Eğer müşteri ÇAKIŞAN (dolu) bir saat isterse, o saatin dolu olduğunu belirt ve en yakın BOŞ olan 2 alternatifi öner.
 5. Müşterinin adını, istediği hizmeti, tercih ettiği tarih ve saati netleştir.
 6. Tüm bilgiler netleştiğinde randevuyu kesinleştirerek "confirm" veya "done" adımına geç ve "appointment" objesini doldur.
+7. İPTAL İŞLEMİ:
+   - Müşteri randevusunu iptal etmek isterse MÜŞTERİNİN AKTİF RANDEVULARI listesine bak.
+   - Listede gösterilen ID'leri AYNEN kullan — uydurma ID yazma.
+   - Tek randevu + müşteri onayladıysa: "cancelAppointmentId" = o randevunun gerçek ID'si.
+   - Birden fazla randevu + müşteri hangisini seçtiyse: seçilenin gerçek ID'sini yaz.
+   - Müşteri "hepsini" / "tümünü" iptal der ve onaylarsa: "cancelAll": true (cancelAppointmentId null).
+   - Aktif randevu yoksa: iptal edilecek randevu bulunmadığını söyle.
+   - İptal onaylandığında "appointment" objesini BOŞ bırak.
+   - Asla "sistemden iptal yapamıyorum" deme.
 
-ÖNEMLİ: "appointment" nesnesini sadece randevuyu kesinleştirmek üzereyken doldur ve alanların doğru olduğundan emin ol.
+ÖNEMLİ: "appointment" nesnesini sadece YENİ randevu kesinleşirken doldur. İptal için cancelAppointmentId veya cancelAll kullan.
+ÖNEMLİ: Aynı mesajda hem "appointment" hem iptal alanları gönderme.
 Giriş Tarihi her zaman ISO formatında olmalıdır (Ör: 2026-05-29T14:30:00.000Z).
 
 Cevabını her zaman geçerli bir JSON formatında ver:
 {
   "message": "müşteriye gönderilecek cana yakın türkçe cevap",
-  "nextStep": "greeting/name/date/time/confirm/done",
+  "nextStep": "greeting/name/date/time/confirm/done/cancel",
   "data": {
     "name": "müşterinin belirlenen adı",
     "serviceCode": "seçilen hizmet kodu (örn: berber_sac_kisa)",
     "date": "seçilen tarih (YYYY-MM-DD)",
     "time": "seçilen saat (HH:MM)"
   },
+  "cancelAppointmentId": "iptal edilecek tek randevunun gerçek ID'si veya null",
+  "cancelAppointmentIds": [],
+  "cancelAll": false,
   "appointment": {
     "customerId": "${customer?.id || ''}",
     "customerName": "${customerName}",
@@ -811,6 +852,9 @@ Cevabını her zaman geçerli bir JSON formatında ver:
         nextStep: session.step,
         data: {},
         appointment: null,
+        cancelAppointmentId: null,
+        cancelAppointmentIds: [],
+        cancelAll: false,
         newCustomer: null,
       };
 
@@ -821,6 +865,9 @@ Cevabını her zaman geçerli bir JSON formatında ver:
         nextStep: session.step,
         data: {},
         appointment: null,
+        cancelAppointmentId: null,
+        cancelAppointmentIds: [],
+        cancelAll: false,
         newCustomer: null,
       };
     }

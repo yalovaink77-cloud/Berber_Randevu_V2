@@ -18,7 +18,8 @@ class AppointmentLogic {
   /**
    * Yeni randevu oluştur
    */
-  static async createAppointment(appointmentData) {
+  static async createAppointment(appointmentData, options = {}) {
+    const { notify = true } = options;
     try {
       // Bağımsızlık kontrolü - başka randevu var mı?
       const barberAppointments = await DatabaseService.getActiveAppointmentsByBarber(
@@ -55,15 +56,17 @@ class AppointmentLogic {
         console.error('AI ozeti olusturulamadi:', error.message);
       }
 
-      // WhatsApp onay mesajı gönder
-      try {
-        const date = new Date(appointment.appointmentDate);
-        const dateStr = date.toLocaleDateString('tr-TR');
-        const timeStr = date.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-        const message = `Merhaba ${appointment.customerName}!\n\nRandevunuz alındı\nBerber: ${appointment.barberName}\nTarih: ${dateStr}\nSaat: ${timeStr}\n\nTeşekkür ederiz!`;
-        await WhatsAppService.sendMessage(appointmentData.customerPhone, message);
-      } catch (error) {
-        console.error('WhatsApp onay mesaji gonderilemedi:', error.message);
+      // WhatsApp onay mesajı gönder (sohbet akışında AI zaten yazdıysa atla)
+      if (notify) {
+        try {
+          const date = new Date(appointment.appointmentDate);
+          const dateStr = date.toLocaleDateString('tr-TR');
+          const timeStr = date.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+          const message = `Merhaba ${appointment.customerName}!\n\nRandevunuz alındı\nBerber: ${appointment.barberName}\nTarih: ${dateStr}\nSaat: ${timeStr}\n\nTeşekkür ederiz!`;
+          await WhatsAppService.sendMessage(appointmentData.customerPhone, message);
+        } catch (error) {
+          console.error('WhatsApp onay mesaji gonderilemedi:', error.message);
+        }
       }
 
       return appointment;
@@ -124,7 +127,8 @@ class AppointmentLogic {
   /**
    * Randevuyu iptal et
    */
-  static async cancelAppointment(appointmentId) {
+  static async cancelAppointment(appointmentId, options = {}) {
+    const { notify = true } = options;
     try {
       const appointment = await DatabaseService.getAppointmentById(appointmentId);
 
@@ -132,12 +136,14 @@ class AppointmentLogic {
         throw new Error('Randevu bulunamadi');
       }
 
-      // Musteriye WhatsApp mesajı gonder
-      try {
-        const message = `Merhaba ${appointment.customerName}!\n\nRandevunuz iptal edildi\nBerber: ${appointment.barberName}\n\nYeni bir randevu icin lutfen bize ulasin.`;
-        await WhatsAppService.sendMessage(appointment.customerPhone, message);
-      } catch (error) {
-        console.error('WhatsApp iptal mesaji gonderilemedi:', error.message);
+      // Musteriye WhatsApp mesajı gonder (sohbet akışında AI zaten yazdıysa atla)
+      if (notify) {
+        try {
+          const message = `Merhaba ${appointment.customerName}!\n\nRandevunuz iptal edildi\nBerber: ${appointment.barberName}\n\nYeni bir randevu icin lutfen bize ulasin.`;
+          await WhatsAppService.sendMessage(appointment.customerPhone, message);
+        } catch (error) {
+          console.error('WhatsApp iptal mesaji gonderilemedi:', error.message);
+        }
       }
 
       return await DatabaseService.cancelAppointment(appointmentId);

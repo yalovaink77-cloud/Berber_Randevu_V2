@@ -23,54 +23,149 @@ class MockModel {
     this.memory = store[modelName] || new Map();
   }
 
-  async findOne(query) {
-    for (const item of this.memory.values()) {
-      if (this._matches(item, query)) {
-        return this._wrap(item);
-      }
-    }
-    return null;
-  }
-
-  async find(query = {}) {
+  find(query = {}) {
     const results = [];
     for (const item of this.memory.values()) {
       if (this._matches(item, query)) {
         results.push(this._wrap(item));
       }
     }
+    return this._queryChain(results);
+  }
 
-    const queryChain = {
-      _results: results,
-      sort: function(sortObj) {
-        if (!sortObj) return this;
-        this._results.sort((a, b) => {
-          for (const [key, direction] of Object.entries(sortObj)) {
-            const valA = String(a[key] || '');
-            const valB = String(b[key] || '');
-            const cmp = valA.localeCompare(valB, 'tr', { sensitivity: 'base', numeric: true });
-            if (cmp !== 0) {
-              return direction === -1 ? -cmp : cmp;
-            }
+  findOne(query) {
+    for (const item of this.memory.values()) {
+      if (this._matches(item, query)) {
+        return this._queryChain([this._wrap(item)], true);
+      }
+    }
+    return this._queryChain([], true);
+  }
+
+  findOneAndUpdate(query, update, options = {}) {
+    const self = this;
+    const chain = {
+      _select: null,
+      select(fields) {
+        this._select = fields;
+        return this;
+      },
+      then(resolve, reject) {
+        try {
+          let doc = self._doFindOneAndUpdate(query, update, options);
+          if (doc && chain._select) {
+            doc = self._applySelect(doc, chain._select);
           }
-          return 0;
-        });
-        return this;
-      },
-      limit: function(n) {
-        this._results.splice(n);
-        return this;
-      },
-      select: function() { return this; },
-      then: function(resolve, reject) {
-        if (resolve) {
-          resolve(this._results);
+          resolve(doc);
+        } catch (e) {
+          if (reject) reject(e);
         }
       },
-      catch: function(reject) {}
+      catch(reject) {
+        return this.then(null, reject);
+      },
     };
+    return chain;
+  }
 
-    return queryChain;
+  _queryChain(results, single = false) {
+    const self = this;
+    const state = { results: [...results], sort: null, limit: null, select: null };
+
+    const chain = {
+      sort(sortObj) {
+        state.sort = sortObj;
+        return chain;
+      },
+      limit(n) {
+        state.limit = Number(n);
+        return chain;
+      },
+      select(fields) {
+        state.select = fields;
+        return chain;
+      },
+      then(resolve, reject) {
+        try {
+          let out = [...state.results];
+          if (state.sort) {
+            out.sort((a, b) => {
+              for (const [key, direction] of Object.entries(state.sort)) {
+                const valA = a[key] instanceof Date ? a[key].getTime() : String(a[key] ?? '');
+                const valB = b[key] instanceof Date ? b[key].getTime() : String(b[key] ?? '');
+                const cmp = valA < valB ? -1 : valA > valB ? 1 : 0;
+                if (cmp !== 0) return direction === -1 ? -cmp : cmp;
+              }
+              return 0;
+            });
+          }
+          if (state.limit != null) out = out.slice(0, state.limit);
+          if (state.select) out = out.map((d) => self._applySelect(d, state.select));
+          resolve(single ? (out[0] ?? null) : out);
+        } catch (e) {
+          if (reject) reject(e);
+        }
+      },
+      catch(reject) {
+        return this.then(null, reject);
+      },
+    };
+    return chain;
+  }
+
+  _applySelect(doc, selectStr) {
+    if (!doc || !selectStr) return doc;
+    const raw = doc.toObject ? doc.toObject() : { ...doc };
+    const fields = selectStr.split(/\s+/).filter(Boolean);
+    const hasInclusion = fields.some((f) => !f.startsWith('-') && !f.startsWith('+'));
+    if (hasInclusion) {
+      const kept = {};
+      for (const f of fields) {
+        if (!f.startsWith('-') && !f.startsWith('+') && raw[f] !== undefined) kept[f] = raw[f];
+      }
+      return this._wrap(kept);
+    }
+    const out = { ...raw };
+    for (const f of fields) {
+      if (f.startsWith('-')) delete out[f.slice(1)];
+    }
+    return this._wrap(out);
+  }
+
+  _doFindOneAndUpdate(query, update, options = {}) {
+    let match = null;
+    let matchKey = null;
+    for (const [key, item] of this.memory.entries()) {
+      if (this._matches(item, query)) {
+        match = item;
+        matchKey = key;
+        break;
+      }
+    }
+
+    if (!match) {
+      if (options.upsert) {
+        let inserted = {};
+        if (update.$setOnInsert) inserted = { ...inserted, ...update.$setOnInsert };
+        if (update.$set) inserted = { ...inserted, ...update.$set };
+        const { v4: uuidv4 } = require('uuid');
+        const id = inserted.id || uuidv4();
+        inserted.id = id;
+        inserted._id = id;
+        this.memory.set(id, inserted);
+        return this._wrap(inserted);
+      }
+      return null;
+    }
+
+    let updated = { ...match };
+    if (update.$set) updated = { ...updated, ...update.$set };
+    else if (update.$setOnInsert) { /* no-op */ }
+    else { updated = { ...updated, ...update }; }
+
+    updated.updatedAt = new Date();
+    this.memory.set(matchKey, updated);
+    return this._wrap(updated);
   }
 
   async create(doc) {
@@ -130,42 +225,6 @@ class MockModel {
       this.memory.set(id, { ...item, id, _id: id });
     });
     return arr;
-  }
-
-  async findOneAndUpdate(query, update, options = {}) {
-    let match = null;
-    let matchKey = null;
-    for (const [key, item] of this.memory.entries()) {
-      if (this._matches(item, query)) {
-        match = item;
-        matchKey = key;
-        break;
-      }
-    }
-
-    if (!match) {
-      if (options.upsert) {
-        let inserted = {};
-        if (update.$setOnInsert) inserted = { ...inserted, ...update.$setOnInsert };
-        if (update.$set) inserted = { ...inserted, ...update.$set };
-        const { v4: uuidv4 } = require('uuid');
-        const id = inserted.id || uuidv4();
-        inserted.id = id;
-        inserted._id = id;
-        this.memory.set(id, inserted);
-        return this._wrap(inserted);
-      }
-      return null;
-    }
-
-    let updated = { ...match };
-    if (update.$set) updated = { ...updated, ...update.$set };
-    else if (update.$setOnInsert) { /* no-op */ }
-    else { updated = { ...updated, ...update }; }
-
-    updated.updatedAt = new Date();
-    this.memory.set(matchKey, updated);
-    return this._wrap(updated);
   }
 
   async countDocuments(query) {

@@ -18,6 +18,7 @@ if (!mongoose.connection.readyState) {
     })
     .catch((err) => {
       console.error('❌ MongoDB bağlantı hatası:', err.message);
+      mongoose.disconnect().catch(() => {});
       if (process.env.NODE_ENV === 'production') {
         console.error('❌ Production ortamında MongoDB zorunludur. Sunucu mock moda geçmeyecek.');
         process.exit(1);
@@ -299,6 +300,16 @@ class DatabaseService {
       { status: 'cancelled', updatedAt: new Date() },
       { returnDocument: 'after' }
     );
+  }
+
+  static async getUpcomingAppointmentsByPhone(barberId, phone) {
+    const now = new Date();
+    return await Appointment.find({
+      barberId,
+      customerPhone: phone,
+      status: { $ne: 'cancelled' },
+      appointmentDate: { $gte: now },
+    }).sort({ appointmentDate: 1 });
   }
 
   static async getAppointmentsByDate(date) {
