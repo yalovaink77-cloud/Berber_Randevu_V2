@@ -2,6 +2,7 @@ const AIService = require('./aiService');
 const WhatsAppService = require('./whatsappService');
 const DatabaseService = require('./databaseService');
 const AppointmentLogic = require('../logic/appointmentLogic');
+const ConversationRules = require('../logic/conversationRules');
 
 const sessions = {};
 
@@ -121,23 +122,32 @@ function resetSession(session) {
 }
 
 async function buildConflictMessage(barberId, appt) {
-  const date = new Date(appt.appointmentDate);
-  const duration = appt.duration || 30;
-  const timeStr = date.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-  const dateStr = date.toLocaleDateString('tr-TR');
+  return ConversationRules.buildSlotConflictMessage(
+    barberId,
+    appt.appointmentDate,
+    appt.duration || 30
+  );
+}
 
-  try {
-    const slots = await AppointmentLogic.getAvailableSlots(barberId, date, duration);
-    const alts = slots.slice(0, 3).map((s) =>
-      s.start.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
-    );
-    if (alts.length) {
-      return `Üzgünüm, ${dateStr} saat ${timeStr} dolu görünüyor. Şu saatler uygun: ${alts.join(', ')}. Hangisini tercih edersiniz?`;
-    }
-    return `Üzgünüm, ${dateStr} saat ${timeStr} dolu ve o gün başka boş saat kalmamış. Farklı bir gün söylerseniz kontrol edeyim.`;
-  } catch {
-    return `Üzgünüm, ${dateStr} saat ${timeStr} dolu görünüyor. Başka bir saat veya gün önerebilir misiniz?`;
+function buildCancelSuccessMessage(cancelledCount, upcoming) {
+  if (cancelledCount > 1) {
+    return `Tamam, ${cancelledCount} randevunuz iptal edildi. Başka bir konuda yardımcı olabilir miyim?`;
   }
+  if (upcoming.length === 1) {
+    const d = new Date(upcoming[0].appointmentDate);
+    const dateStr = d.toLocaleDateString('tr-TR');
+    const timeStr = d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+    return `Tamam, ${dateStr} saat ${timeStr} randevunuz iptal edildi. Başka bir konuda yardımcı olabilir miyim?`;
+  }
+  return 'Randevunuz iptal edildi. Başka bir konuda yardımcı olabilir miyim?';
+}
+
+function buildBookingSuccessMessage(appt) {
+  const d = new Date(appt.appointmentDate);
+  const dateStr = d.toLocaleDateString('tr-TR');
+  const timeStr = d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+  const name = appt.customerName || 'Değerli Müşterimiz';
+  return `Randevunuz oluşturuldu ${name}! ${dateStr} saat ${timeStr} — ${appt.serviceType || 'hizmet'}. Görüşmek üzere!`;
 }
 
 function parseLocalAppointmentDate(dateValue, timeValue) {
@@ -274,7 +284,11 @@ class ConversationService {
           }
         }
         if (cancelled > 0) {
-          await WhatsAppService.sendMessage(from, response.message);
+          const targets = upcoming.filter((a) =>
+            safeCancelIds.includes(getAppointmentId(a))
+          );
+          const msg = buildCancelSuccessMessage(cancelled, targets);
+          await WhatsAppService.sendMessage(from, msg);
           resetSession(session);
           return;
         }
@@ -301,8 +315,22 @@ class ConversationService {
       if (shouldCreate) {
         const appt = buildAppointmentPayload(response, barberId, from);
         try {
+          const slotOk = await ConversationRules.isSlotAvailable(
+            barberId,
+            appt.appointmentDate,
+            appt.duration || 30
+          );
+          if (!slotOk) {
+            const failMsg = await buildConflictMessage(barberId, appt);
+            await WhatsAppService.sendMessage(from, failMsg);
+            session.history.push({ role: 'assistant', content: failMsg });
+            session.step = 'time';
+            session.data = { ...session.data, ...response.data };
+            return;
+          }
           await AppointmentLogic.createAppointment(appt, { notify: false });
-          await WhatsAppService.sendMessage(from, response.message);
+          const successMsg = buildBookingSuccessMessage(appt);
+          await WhatsAppService.sendMessage(from, successMsg);
           resetSession(session);
           return;
         } catch (err) {

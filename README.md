@@ -115,6 +115,25 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 | GET | `/missed-calls` | Kaçan aramalar |
 | POST | `/simulate` | WhatsApp simülasyonu |
 
+### Mobil cihaz — `/api/device`
+
+Berber mobil uygulamasının cevapsız arama ve durum bildirimi için kullanır. JWT veya cihaz anahtarı ile kimlik doğrulanır.
+
+| Metod | Yol | Kimlik |
+|---|---|---|
+| POST | `/missed-call` | `X-Device-Api-Key` + `X-Barber-Id` veya Bearer JWT |
+| PUT | `/status` | Aynı |
+
+Örnek (cihaz anahtarı):
+
+```bash
+curl -X POST http://localhost:3000/api/device/missed-call \
+  -H "X-Device-Api-Key: $DEVICE_API_KEY" \
+  -H "X-Barber-Id: test-barber-id" \
+  -H "Content-Type: application/json" \
+  -d '{"fromPhone":"+905551234567","fromName":"Ahmet","barberStatus":"working","sendAutoReply":true}'
+```
+
 ### Webhook
 
 | Metod | Yol | Açıklama |

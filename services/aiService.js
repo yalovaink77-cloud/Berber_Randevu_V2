@@ -880,6 +880,7 @@ GÖREVLERİN VE KURALLAR:
    - İptal onaylandığında "appointment" objesini BOŞ bırak.
    - Asla "sistemden iptal yapamıyorum" deme.
 
+ÖNEMLİ: Randevu oluşturma ve iptal işlemlerini sistem sunucuda yapar. Sen yalnızca doğal dil cevabı yaz; "randevun oluşturuldu" veya "iptal ettim" deme — sunucu müşteriye doğru metni gönderir.
 ÖNEMLİ: "appointment" nesnesini sadece YENİ randevu kesinleşirken doldur. İptal için cancelAppointmentId veya cancelAll kullan.
 ÖNEMLİ: Aynı mesajda hem "appointment" hem iptal alanları gönderme.
 Giriş Tarihi her zaman ISO formatında olmalıdır. Müşterinin söylediği saat TÜRKİYE yerel saatidir (ör. 14:00 = öğleden sonra 2). appointmentDate için UTC+3 kayması yapma; data.date ve data.time alanlarını doğru doldur.
