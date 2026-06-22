@@ -487,7 +487,6 @@ async function saveNewAppointment(){
       method:'POST',
       headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},
       body:JSON.stringify({
-        customerId:currentUser.id,
         customerName:name,
         customerPhone:phone,
         barberId:currentUser.id,

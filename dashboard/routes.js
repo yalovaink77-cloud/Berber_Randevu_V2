@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const AppointmentLogic = require('../logic/appointmentLogic');
 const DatabaseService = require('../services/databaseService');
+const customerService = require('../services/customerService');
+const authService = require('../services/authService');
 const { requireTenant, requireActiveSubscriptionOnWrite } = require('../middleware/auth');
 const { belongsToBusiness } = require('../utils/tenant');
 
@@ -45,7 +47,6 @@ function requireSelfOrBarber(paramKey = 'customerId') {
 router.post('/', async (req, res, next) => {
   try {
     const {
-      customerId,
       customerName,
       customerPhone,
       barberId,
@@ -57,24 +58,34 @@ router.post('/', async (req, res, next) => {
       price,
     } = req.body;
 
-    if (!customerId || !customerName || !customerPhone || !barberId || !barberName || !appointmentDate) {
+    if (!customerName || !customerPhone || !barberId || !barberName || !appointmentDate) {
       return res.status(400).json({
-        error: 'Gerekli alanlar eksik (customerId, customerName, customerPhone, barberId, barberName, appointmentDate)',
+        error: 'Gerekli alanlar eksik (customerName, customerPhone, barberId, barberName, appointmentDate)',
       });
     }
 
-    if (req.user.role === 'customer' && req.user.id !== customerId) {
-      return res.status(403).json({ error: 'Yalnızca kendi adınıza randevu oluşturabilirsiniz' });
+    if (req.user.role === 'customer') {
+      const normBodyPhone = authService.normalizePhoneNumber(customerPhone);
+      const normUserPhone = authService.normalizePhoneNumber(req.user.phone);
+      if (!normBodyPhone || normBodyPhone !== normUserPhone) {
+        return res.status(403).json({ error: 'Yalnızca kendi adınıza randevu oluşturabilirsiniz' });
+      }
     }
     if (req.user.role === 'barber' && req.user.id !== barberId) {
       return res.status(403).json({ error: 'Yalnızca kendi takviminize randevu ekleyebilirsiniz' });
     }
 
+    const { customer } = await customerService.findOrCreateCustomer(req.businessId, {
+      name: customerName,
+      phone: customerPhone,
+      source: 'appointment',
+    });
+
     const appointment = await AppointmentLogic.createAppointment({
       businessId: req.businessId,
-      customerId,
-      customerName,
-      customerPhone,
+      customerId: customer.id,
+      customerName: customer.name,
+      customerPhone: customer.phone,
       barberId,
       barberName,
       serviceType: serviceType || 'haircut',
@@ -90,6 +101,9 @@ router.post('/', async (req, res, next) => {
       appointment,
     });
   } catch (error) {
+    if (error.status === 400) {
+      return res.status(400).json({ error: error.message });
+    }
     next(error);
   }
 });

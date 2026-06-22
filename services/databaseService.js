@@ -271,12 +271,16 @@ class DatabaseService {
 
   static async createAppointment(businessId, appointmentData) {
     const tenantId = requireBusinessId(businessId);
+    const authService = require('./authService');
+    const normPhone = authService.normalizePhoneNumber(appointmentData.customerPhone)
+      || String(appointmentData.customerPhone || '').trim();
+
     return await Appointment.create({
       id: uuidv4(),
       businessId: tenantId,
       customerId: appointmentData.customerId,
       customerName: appointmentData.customerName,
-      customerPhone: appointmentData.customerPhone,
+      customerPhone: normPhone,
       barberId: appointmentData.barberId,
       barberName: appointmentData.barberName,
       serviceType: appointmentData.serviceType || 'haircut',

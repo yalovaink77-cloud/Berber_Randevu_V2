@@ -7,6 +7,7 @@ const appointmentRoutes = require('./dashboard/routes');
 const serviceRoutes = require('./dashboard/serviceRoutes');
 const authRoutes = require('./dashboard/authRoutes');
 const assistantRoutes = require('./dashboard/assistantRoutes');
+const businessRoutes = require('./dashboard/businessRoutes');
 const deviceRoutes = require('./dashboard/deviceRoutes');
 const path = require('path');
 const { authenticate } = require('./middleware/auth');
@@ -66,11 +67,21 @@ const generalLimiter = rateLimit({
 
 app.use(generalLimiter);
 
+app.get('/api/public/config', (req, res) => {
+  const host = req.get('x-forwarded-host') || req.get('host');
+  const proto = req.get('x-forwarded-proto') || req.protocol;
+  res.json({
+    productName: process.env.APP_NAME || 'Akıllı Berber',
+    referralUrl: process.env.REFERRAL_URL || `${proto}://${host}`,
+  });
+});
+
 // ─── Routes ───────────────────────────────────────────────────────────────
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/appointments', authenticate, appointmentRoutes);
 app.use('/api/services', authenticate, serviceRoutes);
 app.use('/api/assistant', authenticate, assistantRoutes);
+app.use('/api/business', authenticate, businessRoutes);
 app.use('/api/device', deviceRoutes);
 
 // ─── WhatsApp Webhook ─────────────────────────────────────────────────────
