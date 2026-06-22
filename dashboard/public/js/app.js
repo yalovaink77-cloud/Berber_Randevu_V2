@@ -3,6 +3,65 @@ const DAYS = ['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumar
 const MONTHS = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
 const STATUS_TR = {pending:'Bekliyor',confirmed:'Onaylı',completed:'Tamamlandı',cancelled:'İptal'};
 
+let shareConfig = { productName: 'Akıllı Berber', referralUrl: window.location.origin };
+
+async function loadShareConfig() {
+  try {
+    const res = await fetch(`${API}/api/public/config`);
+    if (res.ok) shareConfig = { ...shareConfig, ...(await res.json()) };
+  } catch (_) {}
+}
+loadShareConfig();
+
+function buildShareMessage() {
+  const name = currentUser?.name;
+  const product = shareConfig.productName || 'Akıllı Berber';
+  const url = shareConfig.referralUrl || window.location.origin;
+  const intro = name
+    ? `Merhaba! Ben ${name}, berberimde ${product} randevu asistanını kullanıyorum.`
+    : `Merhaba! Berber randevularını WhatsApp ve yapay zeka ile yöneten ${product} sistemini denedim.`;
+  return `${intro} Gerçekten işime yaradı — sen de bir göz at:\n${url}\n\n✂️ Otomatik WhatsApp randevu\n📞 Cevapsız arama yanıtı\n📅 Berber yönetim paneli`;
+}
+
+function openShareModal() {
+  const preview = document.getElementById('share-preview');
+  const message = buildShareMessage();
+  if (preview) preview.textContent = message;
+  const nativeBtn = document.getElementById('btn-share-native');
+  if (nativeBtn) {
+    nativeBtn.style.display = navigator.share ? 'block' : 'none';
+  }
+  document.getElementById('modal-share')?.classList.add('open');
+}
+
+async function shareViaWhatsApp() {
+  const message = buildShareMessage();
+  window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
+}
+
+async function copyShareMessage() {
+  const message = buildShareMessage();
+  try {
+    await navigator.clipboard.writeText(message);
+    showToast('Paylaşım metni panoya kopyalandı!', 'success');
+  } catch {
+    showToast('Kopyalama başarısız. Metni elle seçip kopyalayabilirsiniz.', 'error');
+  }
+}
+
+async function shareNative() {
+  if (!navigator.share) return;
+  try {
+    await navigator.share({
+      title: shareConfig.productName || 'Akıllı Berber',
+      text: buildShareMessage(),
+      url: shareConfig.referralUrl || window.location.origin,
+    });
+  } catch (e) {
+    if (e?.name !== 'AbortError') showToast('Paylaşım iptal edildi veya desteklenmiyor.', 'error');
+  }
+}
+
 function showToast(message, type = 'success') {
   let container = document.getElementById('toast-container');
   if (!container) {
@@ -52,7 +111,46 @@ if(token && currentUser) {
   showDashboard();
 }
 
+function hideAuthScreens() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('onboarding-screen').style.display = 'none';
+}
+
+function showLoginScreen() {
+  hideAuthScreens();
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('dashboard-screen').style.display = 'none';
+  const err = document.getElementById('login-error');
+  if (err) err.style.display = 'none';
+}
+
+function showOnboardingScreen() {
+  hideAuthScreens();
+  document.getElementById('onboarding-screen').style.display = 'flex';
+  document.getElementById('dashboard-screen').style.display = 'none';
+  const err = document.getElementById('register-error');
+  if (err) err.style.display = 'none';
+}
+
+function persistAuthSession(data) {
+  if (!data?.token || !data?.user) {
+    throw new Error('Oturum verisi eksik');
+  }
+  token = data.token;
+  currentUser = data.user;
+  safeStorage.setItem('berber_token', token);
+  safeStorage.setItem('berber_user', JSON.stringify(currentUser));
+}
+
+function formatAuthError(data, fallback) {
+  if (Array.isArray(data?.details) && data.details.length) {
+    return data.details.join(' · ');
+  }
+  return data?.error || fallback;
+}
+
 document.getElementById('login-password')?.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+document.getElementById('reg-password')?.addEventListener('keydown',e=>{if(e.key==='Enter')doRegisterBusiness();});
 
 async function doLogin(){
   const phone=document.getElementById('login-phone').value.trim();
@@ -67,11 +165,8 @@ async function doLogin(){
       body:JSON.stringify({phone,password})
     });
     const data=await res.json();
-    if(!res.ok) throw new Error(data.error||'Giriş başarısız. Lütfen şifrenizi kontrol edin.');
-    token=data.token;
-    currentUser=data.user;
-    safeStorage.setItem('berber_token',token);
-    safeStorage.setItem('berber_user',JSON.stringify(currentUser));
+    if(!res.ok) throw new Error(formatAuthError(data, 'Giriş başarısız. Lütfen şifrenizi kontrol edin.'));
+    persistAuthSession(data);
     showDashboard();
   }catch(e){
     err.textContent=e.message;
@@ -82,17 +177,55 @@ async function doLogin(){
   }
 }
 
+async function doRegisterBusiness() {
+  const btn = document.getElementById('register-btn');
+  const err = document.getElementById('register-error');
+  const payload = {
+    ownerName: document.getElementById('reg-owner-name').value.trim(),
+    ownerPhone: document.getElementById('reg-owner-phone').value.trim(),
+    ownerEmail: document.getElementById('reg-owner-email').value.trim() || undefined,
+    password: document.getElementById('reg-password').value,
+    businessName: document.getElementById('reg-business-name').value.trim(),
+    businessType: document.getElementById('reg-business-type').value,
+    city: document.getElementById('reg-city').value.trim(),
+  };
+
+  err.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = 'Kayıt oluşturuluyor...';
+
+  try {
+    const res = await fetch(`${API}/api/auth/register/business`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(formatAuthError(data, 'Kayıt tamamlanamadı. Lütfen bilgileri kontrol edin.'));
+    }
+    persistAuthSession(data);
+    showToast(`Hoş geldiniz! ${data.business?.name || 'İşletmeniz'} hazır.`, 'success');
+    showDashboard();
+  } catch (e) {
+    err.textContent = e.message;
+    err.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Kaydı Tamamla';
+  }
+}
+
 function doLogout(){
   safeStorage.removeItem('berber_token');
   safeStorage.removeItem('berber_user');
   token=null;
   currentUser=null;
-  document.getElementById('login-screen').style.display='flex';
-  document.getElementById('dashboard-screen').style.display='none';
+  showLoginScreen();
 }
 
 async function showDashboard(){
-  document.getElementById('login-screen').style.display='none';
+  hideAuthScreens();
   document.getElementById('dashboard-screen').style.display='block';
   document.getElementById('barber-name-display').textContent=currentUser?.name||'Berber';
   

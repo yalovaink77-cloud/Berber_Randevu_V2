@@ -14,17 +14,54 @@
   <div class="login-box">
     <div class="login-logo">💈 Akıllı Berber</div>
     <div class="login-sub">Asistan ve Randevu Sistemi</div>
-    <div class="field"><label>Telefon</label><input type="text" inputmode="tel" id="login-phone" value="+905551112233"/></div>
+    <div class="field"><label>Telefon</label><input type="text" inputmode="tel" id="login-phone" value="05551112233" placeholder="0535 111 22 33" autocomplete="tel"/></div>
     <div class="field"><label>Şifre</label><input type="password" id="login-password" placeholder="Şifreniz"/></div>
     <button class="btn-primary" id="login-btn" onclick="doLogin()">Giriş Yap</button>
     <div class="error-msg" id="login-error" style="color:var(--danger);font-size:12.5px;margin-top:14px;display:none;"></div>
+
+    <p class="auth-switch">
+      İşletmeniz yok mu?
+      <button type="button" class="btn-link" onclick="showOnboardingScreen()">Ücretsiz işletme kaydı</button>
+    </p>
     
     <div class="badge-demo-info">
       <strong>✨ Hızlı Tanıtım Girişi:</strong><br>
       Sistem, geliştirme aşamasında anında deneme yapabilmeniz için hazır bir berber kaydı ile gelir.<br>
-      Telefon: <code>+905551112233</code><br>
+      Telefon: <code>05551112233</code><br>
       Şifre: <code>123456</code>
     </div>
+    <button type="button" class="btn-share-login" onclick="openShareModal()">💌 Arkadaşına Öner</button>
+  </div>
+</div>
+
+<!-- ONBOARDING -->
+<div id="onboarding-screen" style="display:none;">
+  <div class="login-box onboarding-box">
+    <div class="login-logo">💈 İşletme Kaydı</div>
+    <div class="login-sub">14 gün deneme · Randevu paneli</div>
+
+    <div class="field"><label>Ad Soyad</label><input type="text" id="reg-owner-name" placeholder="Adınız Soyadınız" autocomplete="name"/></div>
+    <div class="field"><label>Telefon</label><input type="text" inputmode="tel" id="reg-owner-phone" placeholder="0535 111 22 33" autocomplete="tel"/></div>
+    <div class="field"><label>E-posta (opsiyonel)</label><input type="email" id="reg-owner-email" placeholder="ornek@email.com" autocomplete="email"/></div>
+    <div class="field"><label>Şifre</label><input type="password" id="reg-password" placeholder="En az 8 karakter" autocomplete="new-password"/></div>
+    <div class="field"><label>İşletme Adı</label><input type="text" id="reg-business-name" placeholder="Örn. Gökhan Berber"/></div>
+    <div class="field">
+      <label>İşletme Tipi</label>
+      <select id="reg-business-type">
+        <option value="berber">Berber</option>
+        <option value="kuafor">Kuaför</option>
+        <option value="guzellik_merkezi">Güzellik Merkezi</option>
+      </select>
+    </div>
+    <div class="field"><label>Şehir</label><input type="text" id="reg-city" placeholder="Örn. İstanbul"/></div>
+
+    <button class="btn-primary" id="register-btn" onclick="doRegisterBusiness()">Kaydı Tamamla</button>
+    <div class="error-msg" id="register-error" style="color:var(--danger);font-size:12.5px;margin-top:14px;display:none;"></div>
+
+    <p class="auth-switch">
+      Zaten hesabınız var mı?
+      <button type="button" class="btn-link" onclick="showLoginScreen()">Giriş yap</button>
+    </p>
   </div>
 </div>
 
@@ -419,12 +456,29 @@
   </div>
 </div>
 
+<!-- ARKADAŞINA ÖNER MODAL -->
+<div class="modal-overlay" id="modal-share">
+  <div class="modal modal-share">
+    <div class="modal-title">Arkadaşına Öner</div>
+    <p class="share-lead">Berber arkadaşınıza WhatsApp ile hazır mesaj gönderin veya metni kopyalayın.</p>
+    <div class="share-preview" id="share-preview">Yükleniyor...</div>
+    <div class="share-actions">
+      <button type="button" class="btn-share-wa" onclick="shareViaWhatsApp()">WhatsApp ile Paylaş</button>
+      <button type="button" class="btn-share-copy" onclick="copyShareMessage()">Metni Kopyala</button>
+      <button type="button" class="btn-share-native" id="btn-share-native" onclick="shareNative()" style="display:none;">Paylaş…</button>
+    </div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn-modal-cancel" onclick="closeModal('modal-share')">Kapat</button>
+    </div>
+  </div>
+</div>
+
 <!-- YENİ RANDEVU MODAL -->
 <div class="modal-overlay" id="modal-new">
   <div class="modal">
     <div class="modal-title">Randevu Planla</div>
     <div class="field"><label>Müşteri Adı Soyadı</label><input type="text" id="new-name" placeholder="Ahmet Yılmaz"/></div>
-    <div class="field"><label>Telefon Numarası</label><input type="text" inputmode="tel" id="new-phone" placeholder="+905551112233"/></div>
+    <div class="field"><label>Telefon Numarası</label><input type="text" inputmode="tel" id="new-phone" placeholder="0535 111 22 33"/></div>
     <div class="field"><label>Hizmet Tipi</label>
       <select id="new-service"><option value="">Yükleniyor...</option></select>
     </div>

@@ -2,9 +2,10 @@
   *{margin:0;padding:0;box-sizing:border-box;}
   body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-weight:300;min-height:100vh;}
   
-  /* LOGIN SCREEN */
-  #login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 0%,#2e2410 0%,#0b0a09 80%);}
+  /* LOGIN / ONBOARDING */
+  #login-screen,#onboarding-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 0%,#2e2410 0%,#0b0a09 80%);}
   .login-box{width:400px;padding:48px 40px;border:1px solid var(--border);background:var(--surface);box-shadow:0 15px 35px rgba(0,0,0,0.5);border-radius:4px;}
+  .onboarding-box{width:440px;max-height:92vh;overflow-y:auto;padding:40px 36px;}
   .login-logo{font-family:'Playfair Display',serif;font-size:32px;color:var(--gold);letter-spacing:2px;margin-bottom:8px;text-align:center;}
   .login-sub{color:var(--muted);font-size:12px;margin-bottom:32px;letter-spacing:2px;text-transform:uppercase;text-align:center;}
   .field{margin-bottom:20px;}
@@ -28,6 +29,13 @@
   .barber-name{font-size:13px;color:var(--muted);border-right:1px solid var(--border);padding-right:20px;}
   .btn-logout{background:none;border:1px solid var(--border);color:var(--muted);padding:7px 16px;font-size:11px;letter-spacing:1.3px;text-transform:uppercase;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s;font-weight:500;}
   .btn-logout:hover{border-color:var(--gold);color:var(--text);}
+  .btn-share{background:none;border:1px solid rgba(212,175,55,0.45);color:var(--gold);padding:7px 14px;font-size:11px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s;font-weight:600;white-space:nowrap;}
+  .btn-share:hover{background:rgba(212,175,55,0.12);border-color:var(--gold);color:var(--gold-bright);}
+  .btn-share-login{width:100%;margin-top:16px;padding:12px;background:none;border:1px dashed var(--gold-dim);color:var(--gold);font-family:'DM Sans',sans-serif;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;transition:all .2s;}
+  .btn-share-login:hover{border-color:var(--gold);background:rgba(212,175,55,0.08);}
+  .auth-switch{margin-top:18px;text-align:center;font-size:12px;color:var(--muted);line-height:1.6;}
+  .btn-link{background:none;border:none;padding:0;color:var(--gold);font:inherit;font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:3px;}
+  .btn-link:hover{color:var(--gold-bright);}
 
   /* TABS SYSTEM */
   .tab-nav{display:flex;gap:4px;margin-bottom:32px;border-bottom:1px solid var(--border);padding-bottom:1px;}
@@ -145,6 +153,43 @@
   .btn-modal-cancel{flex:1;padding:12px;background:none;border:1px solid var(--border);color:var(--muted);font-family:'DM Sans',sans-serif;font-size:11px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;transition:all .2s;}
   .btn-modal-cancel:hover{border-color:var(--gold);color:var(--text);}
 
+  /* SHARE MODAL */
+  .modal-share { width: 520px; max-width: calc(100vw - 32px); }
+  .share-lead { color: var(--muted); font-size: 13px; line-height: 1.5; margin-bottom: 16px; }
+  .share-preview {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--gold);
+    padding: 16px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text);
+    white-space: pre-wrap;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+  .share-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
+  .btn-share-wa,
+  .btn-share-copy,
+  .btn-share-native {
+    width: 100%;
+    padding: 12px 16px;
+    border: none;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .btn-share-wa { background: #25d366; color: #fff; }
+  .btn-share-wa:hover { background: #1ebe57; }
+  .btn-share-copy { background: var(--gold); color: #0b0a09; }
+  .btn-share-copy:hover { background: var(--gold-bright); }
+  .btn-share-native { background: none; border: 1px solid var(--border); color: var(--muted); }
+  .btn-share-native:hover { border-color: var(--gold); color: var(--text); }
+
   /* TOAST NOTIFICATION */
   .toast-container {
     position: fixed;
@@ -206,10 +251,11 @@
     .topbar-logo { font-size: 17px; }
     .barber-name { padding-right: 12px; font-size: 12px; }
     .btn-logout { padding: 6px 12px; }
+    .btn-share { display: none; }
 
-    /* Giriş kutusu ekrana sığsın */
-    #login-screen { padding: 16px; align-items: flex-start; }
-    .login-box { width: 100%; max-width: 420px; padding: 32px 22px; margin-top: 24px; }
+    /* Giriş / kayıt kutusu ekrana sığsın */
+    #login-screen,#onboarding-screen { padding: 16px; align-items: flex-start; }
+    .login-box,.onboarding-box { width: 100%; max-width: 420px; padding: 32px 22px; margin-top: 24px; }
 
     /* Sekmeler yatay kaydırılabilir olsun */
     .tab-nav {

@@ -20,16 +20,28 @@ const ALLOW_BARBER_REGISTRATION =
   String(process.env.ALLOW_BARBER_REGISTRATION || 'false').toLowerCase() === 'true';
 
 function normalizePhoneNumber(phone) {
-  if (!phone) return '';
-  let cleaned = String(phone).replace(/[^\d+]/g, '');
-  if (cleaned.startsWith('0')) {
-    cleaned = '+90' + cleaned.substring(1);
-  } else if (cleaned.length === 10 && !cleaned.startsWith('+')) {
-    cleaned = '+90' + cleaned;
-  } else if (!cleaned.startsWith('+') && cleaned.startsWith('90') && cleaned.length === 12) {
-    cleaned = '+' + cleaned;
+  if (phone == null || phone === '') return '';
+
+  let digits = String(phone).replace(/\D/g, '');
+  if (!digits) return '';
+
+  if (digits.startsWith('00')) {
+    digits = digits.slice(2);
   }
-  return cleaned;
+
+  if (digits.startsWith('90') && digits.length >= 12) {
+    digits = digits.slice(2);
+  }
+
+  if (digits.startsWith('0') && digits.length === 11) {
+    digits = digits.slice(1);
+  }
+
+  if (digits.length === 10) {
+    return '+90' + digits;
+  }
+
+  return '';
 }
 
 async function register({ name, phone, email, password, role = 'customer' }) {
