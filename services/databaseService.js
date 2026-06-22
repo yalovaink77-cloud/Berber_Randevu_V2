@@ -60,6 +60,14 @@ async function ensureSeedData() {
       console.log(`✅ Demo işletme eklendi (${DEMO_BUSINESS_ID})`);
     }
 
+    // 1b) Demo aktif abonelik (Sprint 2)
+    const subscriptionService = require('./subscriptionService');
+    await subscriptionService.ensureLaunchPlan();
+    const demoSub = await subscriptionService.ensureDemoActiveSubscription(DEMO_BUSINESS_ID);
+    if (demoSub?.status === 'active') {
+      console.log(`✅ Demo abonelik aktif (${DEMO_BUSINESS_ID} / ${demoSub.planCode})`);
+    }
+
     // 2) Varsayılan hizmetler (tenant scoped)
     if (SERVICES.length) {
       const serviceCount = await Service.countDocuments(withBusinessId(DEMO_BUSINESS_ID));

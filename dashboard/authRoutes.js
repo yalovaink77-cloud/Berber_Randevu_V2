@@ -56,14 +56,18 @@ router.get('/me', authenticate, async (req, res, next) => {
 
     const sanitized = authService.sanitize(user);
     let business = null;
+    let subscription = null;
 
     if (user.role === 'barber' && user.businessId) {
       business = await authService.getBusinessSummary(user.businessId);
+      const subscriptionService = require('../services/subscriptionService');
+      subscription = await subscriptionService.getSubscriptionSummary(user.businessId);
     }
 
     res.json({
       user: sanitized,
       business,
+      subscription,
       tenant: business ? { businessId: business.id } : null,
     });
   } catch (err) {

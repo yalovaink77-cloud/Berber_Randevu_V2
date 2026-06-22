@@ -2,10 +2,11 @@ const express = require('express');
 const router = express.Router();
 const AppointmentLogic = require('../logic/appointmentLogic');
 const DatabaseService = require('../services/databaseService');
-const { requireTenant } = require('../middleware/auth');
+const { requireTenant, requireActiveSubscriptionOnWrite } = require('../middleware/auth');
 const { belongsToBusiness } = require('../utils/tenant');
 
 router.use(requireTenant);
+router.use(requireActiveSubscriptionOnWrite);
 
 async function requireAppointmentAccess(req, res, next) {
   try {

@@ -3,6 +3,9 @@ const Joi = require('joi');
 const router = express.Router();
 const DatabaseService = require('../services/databaseService');
 const CallAssistantService = require('../services/callAssistantService');
+const { requireActiveSubscriptionOnWrite } = require('../middleware/auth');
+
+router.use(requireActiveSubscriptionOnWrite);
 
 const contactCategories = ['customer', 'vip', 'family', 'friend', 'supplier', 'unknown', 'blocked'];
 const barberStatuses = ['available', 'working', 'break', 'closed'];

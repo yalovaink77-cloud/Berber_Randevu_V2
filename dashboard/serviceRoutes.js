@@ -1,7 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const DatabaseService = require('../services/databaseService');
-const { requireBarber, requireTenant } = require('../middleware/auth');
+const {
+  requireBarber,
+  requireTenant,
+  requireActiveSubscriptionOnWrite,
+} = require('../middleware/auth');
 
 function slugify(str) {
   const trMap = { 'ç':'c', 'ğ':'g', 'ı':'i', 'ö':'o', 'ş':'s', 'ü':'u',
@@ -13,6 +17,7 @@ function slugify(str) {
 }
 
 router.use(requireTenant);
+router.use(requireActiveSubscriptionOnWrite);
 
 router.get('/list', requireBarber, async (req, res, next) => {
   try {

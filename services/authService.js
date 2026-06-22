@@ -92,12 +92,16 @@ async function login({ phone, password }) {
   }
 
   const token = generateToken(user);
-  const business =
-    user.role === 'barber' && user.businessId
-      ? await getBusinessSummary(user.businessId)
-      : null;
 
-  return { user: sanitize(user), token, business };
+  let business = null;
+  let subscription = null;
+  if (user.role === 'barber' && user.businessId) {
+    business = await getBusinessSummary(user.businessId);
+    const subscriptionService = require('./subscriptionService');
+    subscription = await subscriptionService.getSubscriptionSummary(user.businessId);
+  }
+
+  return { user: sanitize(user), token, business, subscription };
 }
 
 async function getBusinessSummary(businessId) {

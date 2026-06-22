@@ -1,5 +1,9 @@
 const { verifyToken } = require('../services/authService');
 const { attachTenantFromToken, requireTenant } = require('./tenant');
+const {
+  requireActiveSubscription,
+  requireActiveSubscriptionOnWrite,
+} = require('./subscription');
 
 /**
  * Tüm isteklerde JWT kontrol eder.
@@ -51,4 +55,6 @@ module.exports = {
   requireOwnerOrBarber,
   attachTenantFromToken,
   requireTenant,
+  requireActiveSubscription,
+  requireActiveSubscriptionOnWrite,
 };
