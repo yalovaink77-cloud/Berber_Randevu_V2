@@ -20,9 +20,13 @@ class AppointmentLogic {
    */
   static async createAppointment(appointmentData, options = {}) {
     const { notify = true } = options;
+    const businessId = appointmentData.businessId;
+    if (!businessId) {
+      throw new Error('businessId gerekli');
+    }
     try {
-      // Bağımsızlık kontrolü - başka randevu var mı?
       const barberAppointments = await DatabaseService.getActiveAppointmentsByBarber(
+        businessId,
         appointmentData.barberId
       );
 
@@ -45,7 +49,7 @@ class AppointmentLogic {
       }
 
       // Randevu oluştur
-      const appointment = await DatabaseService.createAppointment(appointmentData);
+      const appointment = await DatabaseService.createAppointment(businessId, appointmentData);
 
       // AI özeti oluştur
       try {
@@ -78,17 +82,17 @@ class AppointmentLogic {
   /**
    * Randevuyu güncelle
    */
-  static async updateAppointment(appointmentId, updateData) {
+  static async updateAppointment(businessId, appointmentId, updateData) {
     try {
-      const oldAppointment = await DatabaseService.getAppointmentById(appointmentId);
+      const oldAppointment = await DatabaseService.getAppointmentById(businessId, appointmentId);
 
       if (!oldAppointment) {
         throw new Error('Randevu bulunamadı');
       }
 
-      // Eğer tarih/saat değişirse çakışma kontrolü yap
       if (updateData.appointmentDate) {
         const barberAppointments = await DatabaseService.getActiveAppointmentsByBarber(
+          businessId,
           oldAppointment.barberId
         );
 
@@ -114,6 +118,7 @@ class AppointmentLogic {
       }
 
       const updatedAppointment = await DatabaseService.updateAppointment(
+        businessId,
         appointmentId,
         updateData
       );
@@ -127,10 +132,10 @@ class AppointmentLogic {
   /**
    * Randevuyu iptal et
    */
-  static async cancelAppointment(appointmentId, options = {}) {
+  static async cancelAppointment(businessId, appointmentId, options = {}) {
     const { notify = true } = options;
     try {
-      const appointment = await DatabaseService.getAppointmentById(appointmentId);
+      const appointment = await DatabaseService.getAppointmentById(businessId, appointmentId);
 
       if (!appointment) {
         throw new Error('Randevu bulunamadi');
@@ -146,7 +151,7 @@ class AppointmentLogic {
         }
       }
 
-      return await DatabaseService.cancelAppointment(appointmentId);
+      return await DatabaseService.cancelAppointment(businessId, appointmentId);
     } catch (error) {
       throw new Error('Randevu iptal basarısız: ' + error.message);
     }
@@ -180,6 +185,7 @@ class AppointmentLogic {
 
       // Randevu oluştur
       const appointmentData = {
+        businessId: selectedBarber.businessId,
         customerId: customerData.id,
         customerName: customerData.name,
         customerPhone: customerData.phone,
@@ -199,7 +205,7 @@ class AppointmentLogic {
   /**
    * Berber için kullanılabilir saatleri getir
    */
-  static async getAvailableSlots(barberId, date, slotDuration = 30) {
+  static async getAvailableSlots(businessId, barberId, date, slotDuration = 30) {
     try {
       const barber = await DatabaseService.getUserById(barberId);
 
@@ -216,7 +222,7 @@ class AppointmentLogic {
         }
       }
 
-      const appointments = await DatabaseService.getAvailableSlots(barberId, date);
+      const appointments = await DatabaseService.getAvailableSlots(businessId, barberId, date);
 
       // Berber profilindeki çalışma saatlerini kullan; yoksa env'e, yoksa varsayılana bak
       const businessStart = barber.workHours?.start ?? Number(process.env.BUSINESS_HOURS_START ?? 9);

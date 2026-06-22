@@ -4,6 +4,11 @@ const User = require('../models/User');
 const Appointment = require('../models/Appointment');
 const Contact = require('../models/Contact');
 const MissedCall = require('../models/MissedCall');
+const Service = require('../models/Service');
+const Business = require('../models/Business');
+const { withBusinessId, requireBusinessId } = require('../utils/tenant');
+
+const DEMO_BUSINESS_ID = process.env.DEMO_BUSINESS_ID || 'demo-business-id';
 
 // MongoDB bağlantısı
 if (!mongoose.connection.readyState) {
@@ -36,22 +41,40 @@ if (!mongoose.connection.readyState) {
 async function ensureSeedData() {
   try {
     const bcrypt = require('bcryptjs');
-    const Service = require('../models/Service');
     let SERVICES = [];
     try { SERVICES = require('../data/services'); } catch (e) { /* opsiyonel */ }
 
-    // 1) Varsayılan hizmetler
+    const demoPhone = process.env.DEMO_BARBER_PHONE || '+905551112233';
+    const demoBarberId = 'test-barber-id';
+
+    // 1) Demo Business
+    let business = await Business.findOne({ id: DEMO_BUSINESS_ID });
+    if (!business) {
+      business = await Business.create({
+        id: DEMO_BUSINESS_ID,
+        name: 'Gökhan Erkek Kuaförü',
+        slug: process.env.DEMO_BUSINESS_SLUG || 'demo-gokhan-berber',
+        businessType: 'berber',
+        status: 'active',
+      });
+      console.log(`✅ Demo işletme eklendi (${DEMO_BUSINESS_ID})`);
+    }
+
+    // 2) Varsayılan hizmetler (tenant scoped)
     if (SERVICES.length) {
-      const serviceCount = await Service.countDocuments({});
+      const serviceCount = await Service.countDocuments(withBusinessId(DEMO_BUSINESS_ID));
       if (!serviceCount) {
-        await Service.insertMany(SERVICES);
-        console.log(`✅ ${SERVICES.length} varsayılan hizmet eklendi`);
+        const rows = SERVICES.map((s) => ({
+          ...s,
+          id: uuidv4(),
+          businessId: DEMO_BUSINESS_ID,
+        }));
+        await Service.insertMany(rows);
+        console.log(`✅ ${rows.length} varsayılan hizmet eklendi (${DEMO_BUSINESS_ID})`);
       }
     }
 
-    // 2) Demo berber kullanıcısı
-    const demoPhone = process.env.DEMO_BARBER_PHONE || '+905551112233';
-    const demoBarberId = 'test-barber-id';
+    // 3) Demo berber kullanıcısı
     let barber = await User.findOne({ phone: demoPhone });
     if (!barber) {
       const demoPassword = process.env.DEMO_BARBER_PASSWORD;
@@ -60,6 +83,7 @@ async function ensureSeedData() {
       }
       barber = await User.create({
         id: demoBarberId,
+        businessId: DEMO_BUSINESS_ID,
         name: 'Gökhan Berber',
         phone: demoPhone,
         email: 'gokhan@berber.com',
@@ -73,11 +97,17 @@ async function ensureSeedData() {
         workHours: { start: 9, end: 20 },
       });
       console.log(`✅ Demo berber kullanıcısı eklendi (giriş: ${demoPhone} / DEMO_BARBER_PASSWORD)`);
+    } else if (!barber.businessId) {
+      await User.updateOne(
+        { id: barber.id },
+        { $set: { businessId: DEMO_BUSINESS_ID, updatedAt: new Date() } }
+      );
+      barber.businessId = DEMO_BUSINESS_ID;
     }
 
-    // 3) Demo berber için bugüne ait örnek randevular (yalnızca hiç yoksa)
+    // 4) Demo berber için bugüne ait örnek randevular (yalnızca hiç yoksa)
     const barberId = (barber && (barber.id || barber._id)) || demoBarberId;
-    const existingAppt = await Appointment.findOne({ barberId });
+    const existingAppt = await Appointment.findOne(withBusinessId(DEMO_BUSINESS_ID, { barberId }));
     if (!existingAppt) {
       const today = new Date().toISOString().split('T')[0];
       const demoAppointments = [
@@ -88,6 +118,7 @@ async function ensureSeedData() {
       for (const a of demoAppointments) {
         await Appointment.create({
           id: uuidv4(),
+          businessId: DEMO_BUSINESS_ID,
           customerId: 'demo-' + a.customerPhone,
           customerName: a.customerName,
           customerPhone: a.customerPhone,
@@ -200,11 +231,10 @@ class DatabaseService {
       .limit(Number(limit));
   }
 
-  static async hasAppointmentHistoryWithPhone(barberId, phone) {
-    const count = await Appointment.countDocuments({
-      barberId,
-      customerPhone: phone,
-    });
+  static async hasAppointmentHistoryWithPhone(businessId, barberId, phone) {
+    const count = await Appointment.countDocuments(
+      withBusinessId(businessId, { barberId, customerPhone: phone })
+    );
     return count > 0;
   }
 
@@ -238,9 +268,11 @@ class DatabaseService {
     ).select('-passwordHash -__v');
   }
 
-  static async createAppointment(appointmentData) {
+  static async createAppointment(businessId, appointmentData) {
+    const tenantId = requireBusinessId(businessId);
     return await Appointment.create({
       id: uuidv4(),
+      businessId: tenantId,
       customerId: appointmentData.customerId,
       customerName: appointmentData.customerName,
       customerPhone: appointmentData.customerPhone,
@@ -251,86 +283,145 @@ class DatabaseService {
       duration: appointmentData.duration || 30,
       notes: appointmentData.notes,
       price: appointmentData.price,
-      status: 'pending',
+      status: appointmentData.status || 'pending',
     });
   }
 
-  static async getAppointmentById(appointmentId) {
-    return await Appointment.findOne({ id: appointmentId });
+  static async getAppointmentById(businessId, appointmentId) {
+    return await Appointment.findOne(withBusinessId(businessId, { id: appointmentId }));
   }
 
-  static async getAppointmentsByCustomer(customerId) {
-    return await Appointment.find({ customerId }).sort({ appointmentDate: -1 });
+  static async getAppointmentsByCustomer(businessId, customerId) {
+    return await Appointment.find(withBusinessId(businessId, { customerId })).sort({
+      appointmentDate: -1,
+    });
   }
 
-  static async getAppointmentsByBarber(barberId) {
-    return await Appointment.find({ barberId }).sort({ appointmentDate: 1 });
+  static async getAppointmentsByBarber(businessId, barberId) {
+    return await Appointment.find(withBusinessId(businessId, { barberId })).sort({
+      appointmentDate: 1,
+    });
   }
 
-  static async getActiveAppointmentsByBarber(barberId) {
-    return await Appointment.find({
-      barberId,
-      status: { $ne: 'cancelled' },
-    }).sort({ appointmentDate: 1 });
+  static async getActiveAppointmentsByBarber(businessId, barberId) {
+    return await Appointment.find(
+      withBusinessId(businessId, {
+        barberId,
+        status: { $ne: 'cancelled' },
+      })
+    ).sort({ appointmentDate: 1 });
   }
 
-  static async getAvailableSlots(barberId, date) {
+  static async getAvailableSlots(businessId, barberId, date) {
     const startOfDay = new Date(date);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
-    return await Appointment.find({
-      barberId,
-      appointmentDate: { $gte: startOfDay, $lte: endOfDay },
-      status: { $ne: 'cancelled' },
-    });
+    return await Appointment.find(
+      withBusinessId(businessId, {
+        barberId,
+        appointmentDate: { $gte: startOfDay, $lte: endOfDay },
+        status: { $ne: 'cancelled' },
+      })
+    );
   }
 
-  static async updateAppointment(appointmentId, updateData) {
+  static async updateAppointment(businessId, appointmentId, updateData) {
     return await Appointment.findOneAndUpdate(
-      { id: appointmentId },
+      withBusinessId(businessId, { id: appointmentId }),
       { ...updateData, updatedAt: new Date() },
       { returnDocument: 'after' }
     );
   }
 
-  static async cancelAppointment(appointmentId) {
+  static async cancelAppointment(businessId, appointmentId) {
     return await Appointment.findOneAndUpdate(
-      { id: appointmentId },
+      withBusinessId(businessId, { id: appointmentId }),
       { status: 'cancelled', updatedAt: new Date() },
       { returnDocument: 'after' }
     );
   }
 
-  static async getUpcomingAppointmentsByPhone(barberId, phone) {
+  static async getUpcomingAppointmentsByPhone(businessId, barberId, phone) {
     const now = new Date();
-    return await Appointment.find({
-      barberId,
-      customerPhone: phone,
-      status: { $ne: 'cancelled' },
-      appointmentDate: { $gte: now },
-    }).sort({ appointmentDate: 1 });
+    return await Appointment.find(
+      withBusinessId(businessId, {
+        barberId,
+        customerPhone: phone,
+        status: { $ne: 'cancelled' },
+        appointmentDate: { $gte: now },
+      })
+    ).sort({ appointmentDate: 1 });
   }
 
-  static async getAppointmentsByDate(date) {
+  static async getAppointmentsByDate(businessId, date) {
     const startOfDay = new Date(date);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
-    return await Appointment.find({
-      appointmentDate: { $gte: startOfDay, $lte: endOfDay },
-    }).sort({ appointmentDate: 1 });
+    return await Appointment.find(
+      withBusinessId(businessId, {
+        appointmentDate: { $gte: startOfDay, $lte: endOfDay },
+      })
+    ).sort({ appointmentDate: 1 });
   }
 
-  static async getUpcomingAppointments(barberId, days = 7) {
+  static async getUpcomingAppointments(businessId, barberId, days = 7) {
     const now = new Date();
     const futureDate = new Date();
     futureDate.setDate(futureDate.getDate() + Number(days));
-    return await Appointment.find({
-      barberId,
-      appointmentDate: { $gte: now, $lte: futureDate },
-      status: { $ne: 'cancelled' },
-    }).sort({ appointmentDate: 1 });
+    return await Appointment.find(
+      withBusinessId(businessId, {
+        barberId,
+        appointmentDate: { $gte: now, $lte: futureDate },
+        status: { $ne: 'cancelled' },
+      })
+    ).sort({ appointmentDate: 1 });
+  }
+
+  // ─── Service (tenant scoped) ─────────────────────────────────────────────
+
+  static async getServicesByBusiness(businessId) {
+    return await Service.find(withBusinessId(businessId)).sort({
+      businessType: 1,
+      category: 1,
+    });
+  }
+
+  static async getServiceById(businessId, serviceId) {
+    return await Service.findOne(withBusinessId(businessId, { id: serviceId }));
+  }
+
+  static async findServiceByCode(businessId, code) {
+    return await Service.findOne(withBusinessId(businessId, { code }));
+  }
+
+  static async createService(businessId, serviceData) {
+    const tenantId = requireBusinessId(businessId);
+    return await Service.create({
+      id: uuidv4(),
+      businessId: tenantId,
+      businessType: serviceData.businessType || 'berber',
+      category: serviceData.category,
+      name: serviceData.name,
+      code: serviceData.code,
+      defaultDuration: serviceData.defaultDuration ?? 30,
+      priceMin: serviceData.priceMin ?? 0,
+      priceMax: serviceData.priceMax ?? serviceData.priceMin ?? 0,
+      isActive: serviceData.isActive !== false,
+    });
+  }
+
+  static async updateService(businessId, serviceId, updateData) {
+    return await Service.findOneAndUpdate(
+      withBusinessId(businessId, { id: serviceId }),
+      { $set: { ...updateData, updatedAt: new Date() } },
+      { returnDocument: 'after' }
+    );
+  }
+
+  static async deleteService(businessId, serviceId) {
+    return await Service.deleteOne(withBusinessId(businessId, { id: serviceId }));
   }
 }
 

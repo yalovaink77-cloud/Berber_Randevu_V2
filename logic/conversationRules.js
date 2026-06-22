@@ -10,27 +10,37 @@ function formatSlotTime(date) {
   return date.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
 }
 
-async function isSlotAvailable(barberId, appointmentDate, duration = 30) {
+async function isSlotAvailable(businessId, barberId, appointmentDate, duration = 30) {
   const date = new Date(appointmentDate);
   if (Number.isNaN(date.getTime())) return false;
 
-  const slots = await AppointmentLogic.getAvailableSlots(barberId, date, duration || 30);
+  const slots = await AppointmentLogic.getAvailableSlots(
+    businessId,
+    barberId,
+    date,
+    duration || 30
+  );
   const h = date.getHours();
   const m = date.getMinutes();
   return slots.some((s) => s.start.getHours() === h && s.start.getMinutes() === m);
 }
 
-async function suggestAlternativeSlots(barberId, appointmentDate, duration = 30, count = 3) {
+async function suggestAlternativeSlots(businessId, barberId, appointmentDate, duration = 30, count = 3) {
   const date = new Date(appointmentDate);
-  const slots = await AppointmentLogic.getAvailableSlots(barberId, date, duration || 30);
+  const slots = await AppointmentLogic.getAvailableSlots(
+    businessId,
+    barberId,
+    date,
+    duration || 30
+  );
   return slots.slice(0, count).map((s) => formatSlotTime(s.start));
 }
 
-async function buildSlotConflictMessage(barberId, appointmentDate, duration = 30) {
+async function buildSlotConflictMessage(businessId, barberId, appointmentDate, duration = 30) {
   const date = new Date(appointmentDate);
   const timeStr = formatSlotTime(date);
   const dateStr = date.toLocaleDateString('tr-TR');
-  const alts = await suggestAlternativeSlots(barberId, date, duration, 3);
+  const alts = await suggestAlternativeSlots(businessId, barberId, date, duration, 3);
 
   if (alts.length) {
     return `Üzgünüm, ${dateStr} saat ${timeStr} dolu görünüyor. Şu saatler uygun: ${alts.join(', ')}. Hangisini tercih edersiniz?`;

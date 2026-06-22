@@ -1,4 +1,5 @@
 const { verifyToken } = require('../services/authService');
+const { attachTenantFromToken, requireTenant } = require('./tenant');
 
 /**
  * Tüm isteklerde JWT kontrol eder.
@@ -13,7 +14,7 @@ function authenticate(req, res, next) {
   const token = header.split(' ')[1];
   try {
     req.user = verifyToken(token);
-    next();
+    attachTenantFromToken(req, res, next);
   } catch {
     return res.status(401).json({ error: 'Geçersiz veya süresi dolmuş token' });
   }
@@ -44,4 +45,10 @@ function requireOwnerOrBarber(paramKey = 'id') {
   };
 }
 
-module.exports = { authenticate, requireBarber, requireOwnerOrBarber };
+module.exports = {
+  authenticate,
+  requireBarber,
+  requireOwnerOrBarber,
+  attachTenantFromToken,
+  requireTenant,
+};

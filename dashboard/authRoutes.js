@@ -46,14 +46,26 @@ router.post('/login', async (req, res, next) => {
 
 /**
  * GET /api/auth/me
- * Token sahibinin profilini döner
+ * Token sahibinin profilini ve işletme bağlamını döner (sunucu kaynaklı).
  */
 router.get('/me', authenticate, async (req, res, next) => {
   try {
     const User = require('../models/User');
     const user = await User.findOne({ id: req.user.id }).select('-passwordHash -__v');
     if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
-    res.json(user);
+
+    const sanitized = authService.sanitize(user);
+    let business = null;
+
+    if (user.role === 'barber' && user.businessId) {
+      business = await authService.getBusinessSummary(user.businessId);
+    }
+
+    res.json({
+      user: sanitized,
+      business,
+      tenant: business ? { businessId: business.id } : null,
+    });
   } catch (err) {
     next(err);
   }

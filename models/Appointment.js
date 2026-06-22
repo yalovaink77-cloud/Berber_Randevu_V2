@@ -26,6 +26,10 @@ const appointmentSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  businessId: {
+    type: String,
+    index: true,
+  },
   serviceType: {
     type: String,
     default: 'haircut',
@@ -60,6 +64,7 @@ const appointmentSchema = new mongoose.Schema({
 appointmentSchema.index({ appointmentDate: 1 });
 appointmentSchema.index({ customerId: 1 });
 appointmentSchema.index({ barberId: 1 });
+appointmentSchema.index({ businessId: 1, appointmentDate: 1 });
 appointmentSchema.index({ status: 1 });
 
 const originalModel = mongoose.model('Appointment', appointmentSchema);

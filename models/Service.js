@@ -2,8 +2,13 @@ const mongoose = require('mongoose');
 
 const serviceSchema = new mongoose.Schema({
   id: { type: String, unique: true, required: true },
-  
-  // Hangi işletme tipine ait
+
+  businessId: {
+    type: String,
+    index: true,
+  },
+
+  // Hangi işletme tipine ait (sektör şablonu)
   businessType: {
     type: String,
     enum: ['berber', 'kuafor', 'guzellik_merkezi'],
@@ -16,8 +21,8 @@ const serviceSchema = new mongoose.Schema({
   // Hizmet adı
   name: { type: String, required: true },
 
-  // Kod (AI ve sistem için)
-  code: { type: String, unique: true, required: true },
+  // Kod (AI ve sistem için) — tenant içinde benzersiz
+  code: { type: String, required: true },
 
   // Süre (dakika)
   defaultDuration: { type: Number, default: 30 },
@@ -31,6 +36,7 @@ const serviceSchema = new mongoose.Schema({
 });
 
 serviceSchema.index({ businessType: 1, category: 1 });
+serviceSchema.index({ businessId: 1, code: 1 }, { unique: true });
 
 const originalModel = mongoose.model('Service', serviceSchema);
 const { createModelProxy } = require('./mockFactory');

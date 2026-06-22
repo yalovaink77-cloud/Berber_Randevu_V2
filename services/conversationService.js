@@ -121,8 +121,9 @@ function resetSession(session) {
   session.pendingCancelAll = false;
 }
 
-async function buildConflictMessage(barberId, appt) {
+async function buildConflictMessage(businessId, barberId, appt) {
   return ConversationRules.buildSlotConflictMessage(
+    businessId,
     barberId,
     appt.appointmentDate,
     appt.duration || 30
@@ -163,8 +164,8 @@ function parseLocalAppointmentDate(dateValue, timeValue) {
   return new Date(raw);
 }
 
-function buildAppointmentPayload(response, barberId, from) {
-  const appt = { ...response.appointment };
+function buildAppointmentPayload(response, businessId, barberId, from) {
+  const appt = { ...response.appointment, businessId };
   if (!appt.barberId) appt.barberId = barberId;
   if (!appt.customerPhone) appt.customerPhone = from;
 
@@ -208,6 +209,12 @@ class ConversationService {
         }
       }
 
+      const barberUser = await DatabaseService.getUserById(barberId);
+      const businessId =
+        barberUser?.businessId ||
+        process.env.DEMO_BUSINESS_ID ||
+        'demo-business-id';
+
       const contact = await DatabaseService.getContactByPhone(barberId, from);
       const isSavedContact = !!contact;
       let customer = contact;
@@ -215,7 +222,11 @@ class ConversationService {
         customer = await DatabaseService.getUserByPhone(from);
       }
 
-      const upcoming = await DatabaseService.getUpcomingAppointmentsByPhone(barberId, from);
+      const upcoming = await DatabaseService.getUpcomingAppointmentsByPhone(
+        businessId,
+        barberId,
+        from
+      );
 
       const response = await AIService.generateConversationResponse(
         text,
@@ -277,7 +288,7 @@ class ConversationService {
         let cancelled = 0;
         for (const id of safeCancelIds) {
           try {
-            await AppointmentLogic.cancelAppointment(id, { notify: false });
+            await AppointmentLogic.cancelAppointment(businessId, id, { notify: false });
             cancelled++;
           } catch (err) {
             console.error('İptal hatası:', id, err.message);
@@ -313,15 +324,16 @@ class ConversationService {
         safeCancelIds.length === 0;
 
       if (shouldCreate) {
-        const appt = buildAppointmentPayload(response, barberId, from);
+        const appt = buildAppointmentPayload(response, businessId, barberId, from);
         try {
           const slotOk = await ConversationRules.isSlotAvailable(
+            businessId,
             barberId,
             appt.appointmentDate,
             appt.duration || 30
           );
           if (!slotOk) {
-            const failMsg = await buildConflictMessage(barberId, appt);
+            const failMsg = await buildConflictMessage(businessId, barberId, appt);
             await WhatsAppService.sendMessage(from, failMsg);
             session.history.push({ role: 'assistant', content: failMsg });
             session.step = 'time';
@@ -336,7 +348,7 @@ class ConversationService {
         } catch (err) {
           const isConflict = /mesgul|meşgul|çakış|dolu/i.test(err.message);
           const failMsg = isConflict
-            ? await buildConflictMessage(barberId, appt)
+            ? await buildConflictMessage(businessId, barberId, appt)
             : 'Üzgünüm, randevu kaydedilemedi. Lütfen tarih ve saati tekrar kontrol edelim.';
           console.error('Randevu oluşturma hatası:', err.message);
           await WhatsAppService.sendMessage(from, failMsg);

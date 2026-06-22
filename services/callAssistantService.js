@@ -74,7 +74,10 @@ class CallAssistantService {
   }) {
     const AIService = require('./aiService');
     const contact = await DatabaseService.getContactByPhone(barberId, fromPhone);
+    const profile = await DatabaseService.getUserById(barberId);
+    const businessId = profile?.businessId || process.env.DEMO_BUSINESS_ID || 'demo-business-id';
     const hasAppointmentHistory = await DatabaseService.hasAppointmentHistoryWithPhone(
+      businessId,
       barberId,
       fromPhone
     );
@@ -85,8 +88,6 @@ class CallAssistantService {
       assistantSettings,
     });
 
-    // Berber ismini alalım
-    const profile = await DatabaseService.getUserById(barberId);
     const barberName = profile?.name || 'Umut Berber';
 
     // Karara göre AI ile kişiye özel, samimi yanıt hazırlıyoruz

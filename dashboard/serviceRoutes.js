@@ -1,8 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const Service = require('../models/Service');
-const { requireBarber } = require('../middleware/auth');
-const { v4: uuidv4 } = require('uuid');
+const DatabaseService = require('../services/databaseService');
+const { requireBarber, requireTenant } = require('../middleware/auth');
 
 function slugify(str) {
   const trMap = { 'ç':'c', 'ğ':'g', 'ı':'i', 'ö':'o', 'ş':'s', 'ü':'u',
@@ -13,21 +12,17 @@ function slugify(str) {
   return str.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_').trim();
 }
 
-/**
- * GET /api/services/list
- * Tüm hizmetleri listele (authenticate → herhangi giriş yapmış kullanıcı)
- */
-router.get('/list', async (req, res, next) => {
+router.use(requireTenant);
+
+router.get('/list', requireBarber, async (req, res, next) => {
   try {
-    const services = await Service.find({}).sort({ businessType: 1, category: 1 });
+    const services = await DatabaseService.getServicesByBusiness(req.businessId);
     res.json(services);
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 });
 
-/**
- * POST /api/services/create
- * Yeni hizmet ekle — sadece berber
- */
 router.post('/create', requireBarber, async (req, res, next) => {
   try {
     const { category, name, defaultDuration, priceMin, priceMax } = req.body;
@@ -36,13 +31,12 @@ router.post('/create', requireBarber, async (req, res, next) => {
     }
 
     const serviceCode = 'berber_' + slugify(name);
-    const existing = await Service.findOne({ code: serviceCode });
+    const existing = await DatabaseService.findServiceByCode(req.businessId, serviceCode);
     if (existing) {
       return res.status(400).json({ error: 'Bu isimde bir hizmet zaten mevcut.' });
     }
 
-    const newService = await Service.create({
-      id: uuidv4(),
+    const newService = await DatabaseService.createService(req.businessId, {
       code: serviceCode,
       businessType: 'berber',
       category,
@@ -53,22 +47,22 @@ router.post('/create', requireBarber, async (req, res, next) => {
       isActive: true,
     });
 
-    res.status(201).json({ success: true, message: 'Hizmet başarıyla eklendi.', service: newService });
+    res.status(201).json({
+      success: true,
+      message: 'Hizmet başarıyla eklendi.',
+      service: newService,
+    });
   } catch (error) {
     next(error);
   }
 });
 
-/**
- * PUT /api/services/update/:id
- * Hizmet güncelle — sadece berber
- */
 router.put('/update/:id', requireBarber, async (req, res, next) => {
   try {
     const { id } = req.params;
     const { category, name, defaultDuration, priceMin, priceMax, isActive } = req.body;
 
-    const service = await Service.findOne({ id });
+    const service = await DatabaseService.getServiceById(req.businessId, id);
     if (!service) {
       return res.status(404).json({ error: 'Güncellenecek hizmet bulunamadı.' });
     }
@@ -81,25 +75,21 @@ router.put('/update/:id', requireBarber, async (req, res, next) => {
     if (priceMax !== undefined) updatedData.priceMax = Number(priceMax) || Number(priceMin);
     if (isActive !== undefined) updatedData.isActive = Boolean(isActive);
 
-    const updated = await Service.findOneAndUpdate({ id }, { $set: updatedData }, { new: true });
+    const updated = await DatabaseService.updateService(req.businessId, id, updatedData);
     res.json({ success: true, message: 'Hizmet başarıyla güncellendi.', service: updated });
   } catch (error) {
     next(error);
   }
 });
 
-/**
- * DELETE /api/services/delete/:id
- * Hizmet sil — sadece berber
- */
 router.delete('/delete/:id', requireBarber, async (req, res, next) => {
   try {
     const { id } = req.params;
-    const service = await Service.findOne({ id });
+    const service = await DatabaseService.getServiceById(req.businessId, id);
     if (!service) {
       return res.status(404).json({ error: 'Silinecek hizmet bulunamadı.' });
     }
-    await Service.deleteOne({ id });
+    await DatabaseService.deleteService(req.businessId, id);
     res.json({ success: true, message: 'Hizmet başarıyla silindi.' });
   } catch (error) {
     next(error);

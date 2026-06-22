@@ -24,6 +24,10 @@ const userSchema = new mongoose.Schema({
     enum: ['barber', 'customer'],
     default: 'customer',
   },
+  businessId: {
+    type: String,
+    index: true,
+  },
   passwordHash: {
     type: String,
     select: false,

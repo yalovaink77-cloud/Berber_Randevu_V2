@@ -739,16 +739,19 @@ JSON formatında cevap ver:
   async generateConversationResponse(text, session, customer, isSavedContact = false, customerPhone = '') {
     try {
       const DatabaseService = require('./databaseService');
-      const Service = require('../models/Service');
 
-      // Fetch active barber and services list
       const barbers = await DatabaseService.getAllBarbers();
-      const barber = barbers[0] || { id: 'test-barber-id', name: 'Gökhan Berber', businessType: 'berber' };
-      const services = await Service.find({ businessType: barber.businessType || 'berber' });
+      const barber = barbers[0] || {
+        id: 'test-barber-id',
+        name: 'Gökhan Berber',
+        businessType: 'berber',
+        businessId: process.env.DEMO_BUSINESS_ID || 'demo-business-id',
+      };
+      const businessId = barber.businessId || process.env.DEMO_BUSINESS_ID || 'demo-business-id';
+      const services = await DatabaseService.getServicesByBusiness(businessId);
       const servicesStr = services.map(s => `- ${s.name} (${s.category}) — Kod: ${s.code}, Süre: ${s.defaultDuration} dk, Fiyat: ${s.priceMin}-${s.priceMax} TL`).join('\n');
 
-      // Fetch existing bookings to avoid conflicts
-      const bookings = await DatabaseService.getActiveAppointmentsByBarber(barber.id);
+      const bookings = await DatabaseService.getActiveAppointmentsByBarber(businessId, barber.id);
       const busySlotsStr = bookings.map(b => {
         const d = new Date(b.appointmentDate);
         const startStr = d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
@@ -760,7 +763,7 @@ JSON formatında cevap ver:
 
       const phone = customerPhone || customer?.phone || '';
       const customerAppointments = phone
-        ? await DatabaseService.getUpcomingAppointmentsByPhone(barber.id, phone)
+        ? await DatabaseService.getUpcomingAppointmentsByPhone(businessId, barber.id, phone)
         : [];
       const customerApptsStr = customerAppointments.length
         ? customerAppointments.map((a) => {
@@ -786,6 +789,7 @@ JSON formatında cevap ver:
       try {
         const AppointmentLogic = require('../logic/appointmentLogic');
         const freeSlots = await AppointmentLogic.getAvailableSlots(
+          businessId,
           barber.id,
           new Date(`${targetDate}T12:00:00`),
           slotDuration

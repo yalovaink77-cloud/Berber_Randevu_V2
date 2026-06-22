@@ -92,15 +92,40 @@ async function login({ phone, password }) {
   }
 
   const token = generateToken(user);
-  return { user: sanitize(user), token };
+  const business =
+    user.role === 'barber' && user.businessId
+      ? await getBusinessSummary(user.businessId)
+      : null;
+
+  return { user: sanitize(user), token, business };
+}
+
+async function getBusinessSummary(businessId) {
+  if (!businessId) return null;
+  const Business = require('../models/Business');
+  const business = await Business.findOne({ id: businessId });
+  if (!business) return null;
+
+  const obj = business.toObject ? business.toObject() : { ...business };
+  return {
+    id: obj.id,
+    name: obj.name,
+    slug: obj.slug,
+    businessType: obj.businessType,
+    status: obj.status,
+  };
 }
 
 function generateToken(user) {
-  return jwt.sign(
-    { id: user.id || user._id, role: user.role, phone: user.phone },
-    JWT_SECRET,
-    { expiresIn: JWT_EXPIRES_IN }
-  );
+  const payload = {
+    id: user.id || user._id,
+    role: user.role,
+    phone: user.phone,
+  };
+  if (user.businessId) {
+    payload.businessId = String(user.businessId);
+  }
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 }
 
 function verifyToken(token) {
@@ -114,4 +139,4 @@ function sanitize(user) {
   return obj;
 }
 
-module.exports = { register, login, verifyToken, sanitize };
+module.exports = { register, login, verifyToken, sanitize, getBusinessSummary };
