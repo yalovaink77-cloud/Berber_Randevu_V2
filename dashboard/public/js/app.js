@@ -740,12 +740,25 @@ async function loadMissedCalls() {
 async function loadProfileSettings() {
   if (!token) return;
   try {
-    const res = await fetch(`${API}/api/assistant/profile`, {
-      headers: {'Authorization': `Bearer ${token}`}
-    });
-    const p = await res.json();
-    
-    document.getElementById('settings-biz-name').value = p.businessName || '';
+    const headers = { Authorization: `Bearer ${token}` };
+    const [bizRes, profileRes] = await Promise.all([
+      fetch(`${API}/api/business/me`, { headers }),
+      fetch(`${API}/api/assistant/profile`, { headers }),
+    ]);
+
+    if (bizRes.ok) {
+      const biz = await bizRes.json();
+      document.getElementById('settings-biz-name').value = biz.business?.name || '';
+      document.getElementById('settings-biz-city').value = biz.business?.city || '';
+      const typeSel = document.getElementById('settings-biz-type');
+      if (typeSel && biz.business?.businessType) {
+        typeSel.value = biz.business.businessType;
+      }
+    }
+
+    if (!profileRes.ok) return;
+    const p = await profileRes.json();
+
     document.getElementById('settings-biz-address').value = p.businessAddress || '';
     document.getElementById('settings-specialties').value = p.specialties ? p.specialties.join(', ') : '';
     document.getElementById('workhours-start').value = p.workHours?.start !== undefined ? p.workHours.start : 9;
@@ -774,6 +787,8 @@ async function loadProfileSettings() {
 
 async function saveProfileSettings() {
   const businessName = document.getElementById('settings-biz-name').value.trim();
+  const businessCity = document.getElementById('settings-biz-city').value.trim();
+  const businessType = document.getElementById('settings-biz-type').value;
   const businessAddress = document.getElementById('settings-biz-address').value.trim();
   const specialties = document.getElementById('settings-specialties').value.split(',').map(s=>s.trim()).filter(Boolean);
   const start = parseInt(document.getElementById('workhours-start').value);
@@ -800,20 +815,35 @@ async function saveProfileSettings() {
   msgVal.style.display = 'none';
 
   try {
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    };
+
+    const bizRes = await fetch(`${API}/api/business/me`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({
+        name: businessName,
+        city: businessCity,
+        businessType,
+      }),
+    });
+    if (!bizRes.ok) {
+      const data = await bizRes.json();
+      throw new Error(data.error || 'İşletme ayarları kaydedilemedi');
+    }
+
     const res = await fetch(`${API}/api/assistant/profile`, {
       method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
+      headers,
       body: JSON.stringify({
-        businessName,
         businessAddress,
         specialties,
         workHours: { start, end },
         workDays,
-        assistantSettings
-      })
+        assistantSettings,
+      }),
     });
     if(res.ok) {
       msgVal.textContent = '✅ Ayarlarınız başarıyla kaydedildi!';
