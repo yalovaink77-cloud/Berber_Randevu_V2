@@ -66,6 +66,40 @@ function buildApp() {
   return app;
 }
 
+const TEST_APPOINTMENT_PHONES = [
+  '+905551234567',
+  '+905559999999',
+  '+905558888888',
+  '+905557777777',
+];
+
+/** Önceki koşulardan kalan test randevularını temizler (slot çakışması önleme). */
+async function cleanupTestAppointments() {
+  const Appointment = require('../models/Appointment');
+  await Appointment.deleteMany({
+    $or: [
+      {
+        barberId: { $in: [DEMO_BARBER_ID, EXPIRED_BARBER_ID, OTHER_BARBER_ID] },
+        customerPhone: { $in: TEST_APPOINTMENT_PHONES },
+      },
+      {
+        businessId: DEMO_BUSINESS_ID,
+        barberId: DEMO_BARBER_ID,
+        customerName: 'Sub Gate Test',
+      },
+    ],
+  });
+}
+
+/** Her çağrıda farklı gelecek slot — tekrarlayan koşulda çakışma riskini düşürür. */
+function uniqueAppointmentDate(hoursFromNow = 48) {
+  const d = new Date(
+    Date.now() + hoursFromNow * 60 * 60 * 1000 + (Date.now() % 45) * 60 * 1000
+  );
+  d.setSeconds(0, 0);
+  return d.toISOString();
+}
+
 async function seedFixtures() {
   const User = require('../models/User');
   const Business = require('../models/Business');
@@ -150,6 +184,7 @@ async function cleanup() {
   const Business = require('../models/Business');
   const Subscription = require('../models/Subscription');
 
+  await cleanupTestAppointments();
   await Subscription.deleteMany({ businessId: { $in: [EXPIRED_BUSINESS_ID, OTHER_BUSINESS_ID] } });
   await User.deleteMany({ id: { $in: [EXPIRED_BARBER_ID, OTHER_BARBER_ID] } });
   await Business.deleteMany({ id: { $in: [EXPIRED_BUSINESS_ID, OTHER_BUSINESS_ID] } });
@@ -162,6 +197,7 @@ async function main() {
   });
 
   await seedFixtures();
+  await cleanupTestAppointments();
 
   delete require.cache[require.resolve('../dashboard/routes')];
   delete require.cache[require.resolve('../dashboard/serviceRoutes')];
@@ -193,14 +229,13 @@ async function main() {
   assert(demoGet.status === 200, `demo GET expected 200, got ${demoGet.status}`);
 
   // Demo: POST success (minimal valid body — may 201 or 400 if validation; must not be 403 subscription)
-  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
   const demoPost = await request(app, 'POST', '/api/appointments/', demoToken, {
     customerId: 'test-customer-sub-gate',
     customerName: 'Sub Gate Test',
     customerPhone: '+905551234567',
     barberId: DEMO_BARBER_ID,
     barberName: 'Gökhan Berber',
-    appointmentDate: tomorrow,
+    appointmentDate: uniqueAppointmentDate(72),
     serviceType: 'haircut',
   });
   assert(demoPost.status !== 403, `demo POST should not be subscription-blocked, got ${demoPost.status}`);
@@ -222,7 +257,7 @@ async function main() {
     customerPhone: '+905559999999',
     barberId: EXPIRED_BARBER_ID,
     barberName: 'Expired Berber',
-    appointmentDate: tomorrow,
+    appointmentDate: uniqueAppointmentDate(96),
   });
   assert(expiredPost.status === 403, `expired POST expected 403, got ${expiredPost.status}`);
   assert(expiredPost.body?.error, 'expired POST should return error message');
@@ -246,7 +281,7 @@ async function main() {
     customerPhone: '+905558888888',
     barberId: OTHER_BARBER_ID,
     barberName: 'Other Berber',
-    appointmentDate: tomorrow,
+    appointmentDate: uniqueAppointmentDate(120),
   });
   assert(otherPost.status === 403, `other tenant without sub POST expected 403, got ${otherPost.status}`);
 
@@ -257,7 +292,7 @@ async function main() {
     customerPhone: '+905557777777',
     barberId: OTHER_BARBER_ID,
     barberName: 'Other Berber',
-    appointmentDate: tomorrow,
+    appointmentDate: uniqueAppointmentDate(144),
   });
   assert(crossPost.status === 403, `cross-tenant POST expected 403, got ${crossPost.status}`);
 
