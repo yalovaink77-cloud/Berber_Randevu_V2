@@ -20,6 +20,10 @@ const businessSchema = new mongoose.Schema({
     enum: ['berber', 'kuafor', 'guzellik_merkezi'],
     default: 'berber',
   },
+  city: {
+    type: String,
+    default: '',
+  },
   status: {
     type: String,
     enum: ['active', 'suspended'],

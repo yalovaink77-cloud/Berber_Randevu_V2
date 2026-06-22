@@ -41,8 +41,6 @@ if (!mongoose.connection.readyState) {
 async function ensureSeedData() {
   try {
     const bcrypt = require('bcryptjs');
-    let SERVICES = [];
-    try { SERVICES = require('../data/services'); } catch (e) { /* opsiyonel */ }
 
     const demoPhone = process.env.DEMO_BARBER_PHONE || '+905551112233';
     const demoBarberId = 'test-barber-id';
@@ -69,17 +67,12 @@ async function ensureSeedData() {
     }
 
     // 2) Varsayılan hizmetler (tenant scoped)
-    if (SERVICES.length) {
-      const serviceCount = await Service.countDocuments(withBusinessId(DEMO_BUSINESS_ID));
-      if (!serviceCount) {
-        const rows = SERVICES.map((s) => ({
-          ...s,
-          id: uuidv4(),
-          businessId: DEMO_BUSINESS_ID,
-        }));
-        await Service.insertMany(rows);
-        console.log(`✅ ${rows.length} varsayılan hizmet eklendi (${DEMO_BUSINESS_ID})`);
-      }
+    const seeded = await DatabaseService.seedDefaultServicesForBusiness(
+      DEMO_BUSINESS_ID,
+      business?.businessType || 'berber'
+    );
+    if (seeded.length) {
+      console.log(`✅ ${seeded.length} varsayılan hizmet eklendi (${DEMO_BUSINESS_ID})`);
     }
 
     // 3) Demo berber kullanıcısı
@@ -388,6 +381,45 @@ class DatabaseService {
   }
 
   // ─── Service (tenant scoped) ─────────────────────────────────────────────
+
+  /**
+   * İşletme tipine göre varsayılan hizmet kataloğunu tenant scope ile seed eder.
+   * Mevcut hizmet varsa yeni kayıt eklemez.
+   */
+  static async seedDefaultServicesForBusiness(businessId, businessType = 'berber') {
+    const tenantId = requireBusinessId(businessId);
+    const existingCount = await Service.countDocuments(withBusinessId(tenantId));
+    if (existingCount > 0) {
+      return Service.find(withBusinessId(tenantId));
+    }
+
+    let templates = [];
+    try {
+      templates = require('../data/services');
+    } catch {
+      /* opsiyonel */
+    }
+
+    const rows = templates
+      .filter((s) => s.businessType === businessType)
+      .map((s) => ({
+        id: uuidv4(),
+        businessId: tenantId,
+        businessType: s.businessType,
+        category: s.category,
+        name: s.name,
+        code: s.code,
+        defaultDuration: s.defaultDuration ?? 30,
+        priceMin: s.priceMin ?? 0,
+        priceMax: s.priceMax ?? s.priceMin ?? 0,
+        isActive: true,
+      }));
+
+    if (rows.length) {
+      await Service.insertMany(rows);
+    }
+    return rows;
+  }
 
   static async getServicesByBusiness(businessId) {
     return await Service.find(withBusinessId(businessId)).sort({

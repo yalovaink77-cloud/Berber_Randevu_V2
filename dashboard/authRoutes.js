@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const authService = require('../services/authService');
+const onboardingService = require('../services/onboardingService');
 const { authenticate } = require('../middleware/auth');
 
 /**
@@ -21,6 +22,30 @@ router.post('/register', async (req, res, next) => {
     const result = await authService.register({ name, phone, email, password, role });
     res.status(201).json({ success: true, ...result });
   } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/auth/register/business
+ * Self-service işletme kaydı.
+ */
+router.post('/register/business', async (req, res, next) => {
+  try {
+    const { user } = await onboardingService.registerBusiness(req.body);
+    const result = await authService.buildAuthResponse(user, { includeToken: true });
+
+    res.status(201).json({ success: true, ...result });
+  } catch (err) {
+    if (err.status === 400) {
+      return res.status(400).json({
+        error: err.message || 'Geçersiz kayıt verisi',
+        details: err.details,
+      });
+    }
+    if (err.status === 409) {
+      return res.status(409).json({ error: err.message });
+    }
     next(err);
   }
 });
@@ -54,22 +79,8 @@ router.get('/me', authenticate, async (req, res, next) => {
     const user = await User.findOne({ id: req.user.id }).select('-passwordHash -__v');
     if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
 
-    const sanitized = authService.sanitize(user);
-    let business = null;
-    let subscription = null;
-
-    if (user.role === 'barber' && user.businessId) {
-      business = await authService.getBusinessSummary(user.businessId);
-      const subscriptionService = require('../services/subscriptionService');
-      subscription = await subscriptionService.getSubscriptionSummary(user.businessId);
-    }
-
-    res.json({
-      user: sanitized,
-      business,
-      subscription,
-      tenant: business ? { businessId: business.id } : null,
-    });
+    const result = await authService.buildAuthResponse(user, { includeToken: false });
+    res.json({ success: true, ...result });
   } catch (err) {
     next(err);
   }

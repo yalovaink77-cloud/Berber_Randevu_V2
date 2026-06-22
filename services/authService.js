@@ -69,8 +69,7 @@ async function register({ name, phone, email, password, role = 'customer' }) {
     role,
   });
 
-  const token = generateToken(user);
-  return { user: sanitize(user), token };
+  return buildAuthResponse(user, { includeToken: true });
 }
 
 async function login({ phone, password }) {
@@ -91,17 +90,38 @@ async function login({ phone, password }) {
     throw err;
   }
 
-  const token = generateToken(user);
+  return buildAuthResponse(user, { includeToken: true });
+}
 
+/**
+ * Auth endpoint'leri için standart yanıt gövdesi.
+ * user: sanitize edilmiş kullanıcı
+ * business / subscription / tenant: berber + businessId varsa dolar
+ * token: includeToken true ise eklenir
+ */
+async function buildAuthResponse(user, { includeToken = false } = {}) {
+  const sanitized = sanitize(user);
   let business = null;
   let subscription = null;
-  if (user.role === 'barber' && user.businessId) {
-    business = await getBusinessSummary(user.businessId);
+
+  if (sanitized.role === 'barber' && sanitized.businessId) {
+    business = await getBusinessSummary(sanitized.businessId);
     const subscriptionService = require('./subscriptionService');
-    subscription = await subscriptionService.getSubscriptionSummary(user.businessId);
+    subscription = await subscriptionService.getSubscriptionSummary(sanitized.businessId);
   }
 
-  return { user: sanitize(user), token, business, subscription };
+  const response = {
+    user: sanitized,
+    business,
+    subscription,
+    tenant: business ? { businessId: business.id } : null,
+  };
+
+  if (includeToken) {
+    response.token = generateToken(user);
+  }
+
+  return response;
 }
 
 async function getBusinessSummary(businessId) {
@@ -116,6 +136,7 @@ async function getBusinessSummary(businessId) {
     name: obj.name,
     slug: obj.slug,
     businessType: obj.businessType,
+    city: obj.city || '',
     status: obj.status,
   };
 }
@@ -143,4 +164,13 @@ function sanitize(user) {
   return obj;
 }
 
-module.exports = { register, login, verifyToken, sanitize, getBusinessSummary };
+module.exports = {
+  register,
+  login,
+  verifyToken,
+  sanitize,
+  getBusinessSummary,
+  normalizePhoneNumber,
+  generateToken,
+  buildAuthResponse,
+};

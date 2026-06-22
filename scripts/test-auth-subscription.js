@@ -183,6 +183,7 @@ async function main() {
   const demoMe = await request(app, 'GET', '/api/auth/me', demoLogin.body.token);
   assert(demoMe.status === 200, 'demo /me status');
   assert(demoMe.body.subscription?.status === 'active', 'demo /me subscription active');
+  assert(demoMe.body.success === true, 'demo /me success flag');
   assert(demoMe.body.tenant?.businessId === DEMO_BUSINESS_ID, 'demo /me tenant preserved');
 
   // Expired business login
@@ -206,6 +207,7 @@ async function main() {
   const nosubMe = await request(app, 'GET', '/api/auth/me', nosubLogin.body.token);
   assert(nosubMe.status === 200, 'nosub /me status');
   assert(nosubMe.body.subscription === null, 'nosub /me subscription null');
+  assert(nosubMe.body.success === true, 'nosub /me success flag');
   assert(nosubMe.body.tenant?.businessId === NOSUB_BUSINESS_ID, 'nosub /me tenant preserved');
 
   await cleanup();
