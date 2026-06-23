@@ -52,6 +52,7 @@ function assertAuthContextShape(body, { requireToken = false, requireBusiness = 
     for (const field of [
       'planCode', 'status', 'priceAmount', 'currency', 'billingInterval',
       'trialEndsAt', 'currentPeriodStart', 'currentPeriodEnd', 'isActive',
+      'effectiveIsActive', 'daysRemaining',
     ]) {
       assert(Object.prototype.hasOwnProperty.call(body.subscription, field), `subscription.${field} missing`);
     }

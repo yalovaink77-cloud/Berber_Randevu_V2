@@ -26,6 +26,12 @@
   .topbar{display:flex;align-items:center;justify-content:space-between;padding:20px 32px;border-bottom:1px solid var(--border);background:var(--surface);}
   .topbar-logo{font-family:'Playfair Display',serif;font-size:22px;color:var(--gold);letter-spacing:1px;font-weight:700;}
   .topbar-right{display:flex;align-items:center;gap:20px;}
+  .subscription-banner{padding:12px 32px;font-size:13px;line-height:1.5;border-bottom:1px solid var(--border);text-align:center;}
+  .subscription-banner-hidden{display:none;}
+  .subscription-banner-trial{background:rgba(212,175,55,0.08);color:var(--gold);border-bottom-color:var(--gold-dim);}
+  .subscription-banner-active{background:rgba(92,184,92,0.08);color:var(--success);}
+  .subscription-banner-inactive{background:rgba(255,107,107,0.08);color:#ff6b6b;}
+  .subscription-banner-missing{background:rgba(255,107,107,0.06);color:var(--muted);}
   .barber-name{font-size:13px;color:var(--muted);border-right:1px solid var(--border);padding-right:20px;}
   .btn-logout{background:none;border:1px solid var(--border);color:var(--muted);padding:7px 16px;font-size:11px;letter-spacing:1.3px;text-transform:uppercase;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s;font-weight:500;}
   .btn-logout:hover{border-color:var(--gold);color:var(--text);}

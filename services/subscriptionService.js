@@ -130,6 +130,14 @@ function isSubscriptionActive(subscription) {
   return ACTIVE_STATUSES.has(subscription.status);
 }
 
+function computeTrialDaysRemaining(trialEndsAt) {
+  if (!trialEndsAt) return null;
+  const end = new Date(trialEndsAt);
+  if (Number.isNaN(end.getTime())) return null;
+  const ms = end.getTime() - Date.now();
+  return Math.max(0, Math.ceil(ms / (24 * 60 * 60 * 1000)));
+}
+
 /**
  * Auth / panel için sanitize edilmiş abonelik özeti.
  * Kayıt yoksa null döner; hata fırlatmaz.
@@ -141,6 +149,10 @@ async function getSubscriptionSummary(businessId) {
   if (!subscription) return null;
 
   const obj = subscription.toObject ? subscription.toObject() : { ...subscription };
+  const effectiveIsActive = isSubscriptionActive(subscription);
+  const daysRemaining =
+    obj.status === 'trialing' ? computeTrialDaysRemaining(obj.trialEndsAt) : null;
+
   return {
     planCode: obj.planCode,
     status: obj.status,
@@ -150,7 +162,9 @@ async function getSubscriptionSummary(businessId) {
     trialEndsAt: obj.trialEndsAt || null,
     currentPeriodStart: obj.currentPeriodStart || null,
     currentPeriodEnd: obj.currentPeriodEnd || null,
-    isActive: isSubscriptionActive(subscription),
+    isActive: effectiveIsActive,
+    effectiveIsActive,
+    daysRemaining,
   };
 }
 
@@ -162,6 +176,7 @@ module.exports = {
   getBusinessSubscription,
   getSubscriptionSummary,
   isSubscriptionActive,
+  computeTrialDaysRemaining,
   LAUNCH_PLAN_CODE,
   DEMO_BUSINESS_ID,
 };

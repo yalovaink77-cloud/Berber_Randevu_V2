@@ -107,6 +107,7 @@ try {
 let services = [];
 let dashboardStatsLoadedFromApi = false;
 let lastBarberAppointments = [];
+let subscriptionContext = null;
 let editingAppointmentId = null;
 
 if(token && currentUser) {
@@ -223,6 +224,8 @@ function doLogout(){
   safeStorage.removeItem('berber_user');
   token=null;
   currentUser=null;
+  subscriptionContext=null;
+  hideSubscriptionBanner();
   showLoginScreen();
 }
 
@@ -234,13 +237,79 @@ async function showDashboard(){
   const picker=document.getElementById('date-picker');
   picker.value=todayStr();
   updateDateHeader(new Date());
-  
+
+  await loadSubscriptionContext();
   await loadServices();
   await Promise.all([loadDashboardStats(), loadAppointments()]);
   await loadProfileSettings();
   await loadMissedCalls();
   
   switchTab('calendar');
+}
+
+function hideSubscriptionBanner() {
+  const el = document.getElementById('subscription-banner');
+  if (!el) return;
+  el.className = 'subscription-banner subscription-banner-hidden';
+  el.textContent = '';
+}
+
+function renderSubscriptionBanner(subscription) {
+  const el = document.getElementById('subscription-banner');
+  if (!el) return;
+
+  let message = '';
+  let variant = 'missing';
+
+  if (!subscription) {
+    message = 'Abonelik bilgisi bulunamadı.';
+  } else if (subscription.status === 'trialing') {
+    const days = subscription.daysRemaining ?? 0;
+    message = `Deneme sürümünüz aktif. Kalan süre: ${days} gün.`;
+    variant = 'trial';
+  } else if (subscription.status === 'active') {
+    message = 'Aboneliğiniz aktif.';
+    variant = 'active';
+  } else if (['expired', 'cancelled', 'past_due'].includes(subscription.status)) {
+    message = 'Aboneliğiniz aktif değil. Yeni randevu ve düzenleme işlemleri kısıtlandı.';
+    variant = 'inactive';
+  } else {
+    message = 'Abonelik bilgisi bulunamadı.';
+  }
+
+  el.className = `subscription-banner subscription-banner-${variant}`;
+  el.textContent = message;
+}
+
+async function loadSubscriptionContext() {
+  if (!token) return;
+
+  try {
+    const res = await fetch(`${API}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.status === 401) {
+      doLogout();
+      return;
+    }
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Abonelik bilgisi yüklenemedi');
+    }
+
+    subscriptionContext = data.subscription || null;
+    if (data.user) {
+      currentUser = data.user;
+      safeStorage.setItem('berber_user', JSON.stringify(currentUser));
+      const nameEl = document.getElementById('barber-name-display');
+      if (nameEl) nameEl.textContent = currentUser.name || 'Berber';
+    }
+
+    renderSubscriptionBanner(subscriptionContext);
+  } catch (e) {
+    subscriptionContext = null;
+    renderSubscriptionBanner(null);
+  }
 }
 
 async function updateBarberStatus(status) {

@@ -15,8 +15,10 @@ const DEMO_PASSWORD = process.env.DEMO_BARBER_PASSWORD;
 
 const EXPIRED_BUSINESS_ID = `auth-expired-${Date.now()}`;
 const NOSUB_BUSINESS_ID = `auth-nosub-${Date.now()}`;
+const TRIAL_BUSINESS_ID = `auth-trial-${Date.now()}`;
 const EXPIRED_BARBER_ID = `auth-expired-barber-${Date.now()}`;
 const NOSUB_BARBER_ID = `auth-nosub-barber-${Date.now()}`;
+const TRIAL_BARBER_ID = `auth-trial-barber-${Date.now()}`;
 
 function assert(cond, msg) {
   if (!cond) throw new Error(msg);
@@ -55,9 +57,9 @@ async function cleanup() {
   const Business = require('../models/Business');
   const Subscription = require('../models/Subscription');
 
-  await Subscription.deleteMany({ businessId: { $in: [EXPIRED_BUSINESS_ID, NOSUB_BUSINESS_ID] } });
-  await User.deleteMany({ id: { $in: [EXPIRED_BARBER_ID, NOSUB_BARBER_ID] } });
-  await Business.deleteMany({ id: { $in: [EXPIRED_BUSINESS_ID, NOSUB_BUSINESS_ID] } });
+  await Subscription.deleteMany({ businessId: { $in: [EXPIRED_BUSINESS_ID, NOSUB_BUSINESS_ID, TRIAL_BUSINESS_ID] } });
+  await User.deleteMany({ id: { $in: [EXPIRED_BARBER_ID, NOSUB_BARBER_ID, TRIAL_BARBER_ID] } });
+  await Business.deleteMany({ id: { $in: [EXPIRED_BUSINESS_ID, NOSUB_BUSINESS_ID, TRIAL_BUSINESS_ID] } });
 }
 
 async function main() {
@@ -81,8 +83,10 @@ async function main() {
 
   const expiredPhone = `+90511${String(Date.now()).slice(-7)}`;
   const nosubPhone = `+90522${String(Date.now() + 1).slice(-7)}`;
+  const trialPhone = `+90533${String(Date.now() + 2).slice(-7)}`;
   const expiredPassword = 'ExpiredPass1!';
   const nosubPassword = 'NoSubPass1!';
+  const trialPassword = 'TrialPass1!';
 
   await Business.findOneAndUpdate(
     { id: EXPIRED_BUSINESS_ID },
@@ -106,6 +110,21 @@ async function main() {
         id: NOSUB_BUSINESS_ID,
         name: 'NoSub Biz',
         slug: NOSUB_BUSINESS_ID,
+        businessType: 'berber',
+        status: 'active',
+        updatedAt: now,
+      },
+      $setOnInsert: { createdAt: now },
+    },
+    { upsert: true }
+  );
+  await Business.findOneAndUpdate(
+    { id: TRIAL_BUSINESS_ID },
+    {
+      $set: {
+        id: TRIAL_BUSINESS_ID,
+        name: 'Trial Biz',
+        slug: TRIAL_BUSINESS_ID,
         businessType: 'berber',
         status: 'active',
         updatedAt: now,
@@ -147,8 +166,26 @@ async function main() {
     },
     { upsert: true }
   );
+  await User.findOneAndUpdate(
+    { id: TRIAL_BARBER_ID },
+    {
+      $set: {
+        id: TRIAL_BARBER_ID,
+        businessId: TRIAL_BUSINESS_ID,
+        name: 'Trial Berber',
+        phone: trialPhone,
+        role: 'barber',
+        passwordHash: bcrypt.hashSync(trialPassword, 12),
+        updatedAt: now,
+      },
+      $setOnInsert: { createdAt: now },
+    },
+    { upsert: true }
+  );
 
-  await Subscription.deleteMany({ businessId: { $in: [EXPIRED_BUSINESS_ID, NOSUB_BUSINESS_ID] } });
+  await Subscription.deleteMany({
+    businessId: { $in: [EXPIRED_BUSINESS_ID, NOSUB_BUSINESS_ID, TRIAL_BUSINESS_ID] },
+  });
   await Subscription.create({
     businessId: EXPIRED_BUSINESS_ID,
     planCode: plan.code,
@@ -160,6 +197,8 @@ async function main() {
     createdAt: now,
     updatedAt: now,
   });
+
+  await subscriptionService.createTrialSubscription(TRIAL_BUSINESS_ID);
 
   delete require.cache[require.resolve('../dashboard/authRoutes')];
   delete require.cache[require.resolve('../services/authService')];
@@ -178,13 +217,34 @@ async function main() {
   assert(demoLogin.body.business?.id === DEMO_BUSINESS_ID, 'demo login business');
   assert(demoLogin.body.subscription?.status === 'active', 'demo subscription.status active');
   assert(demoLogin.body.subscription?.isActive === true, 'demo subscription.isActive true');
+  assert(demoLogin.body.subscription?.effectiveIsActive === true, 'demo effectiveIsActive true');
+  assert(demoLogin.body.subscription?.daysRemaining === null, 'demo daysRemaining null');
   assert(demoLogin.body.token, 'demo login token preserved');
 
   const demoMe = await request(app, 'GET', '/api/auth/me', demoLogin.body.token);
   assert(demoMe.status === 200, 'demo /me status');
   assert(demoMe.body.subscription?.status === 'active', 'demo /me subscription active');
+  assert(demoMe.body.subscription?.effectiveIsActive === true, 'demo /me effectiveIsActive');
   assert(demoMe.body.success === true, 'demo /me success flag');
   assert(demoMe.body.tenant?.businessId === DEMO_BUSINESS_ID, 'demo /me tenant preserved');
+
+  // Trial business login
+  const trialLogin = await request(app, 'POST', '/api/auth/login', null, {
+    phone: trialPhone,
+    password: trialPassword,
+  });
+  assert(trialLogin.status === 200, 'trial login should succeed');
+  assert(trialLogin.body.subscription?.status === 'trialing', 'trial subscription.status');
+  assert(trialLogin.body.subscription?.effectiveIsActive === true, 'trial effectiveIsActive true');
+  assert(trialLogin.body.subscription?.isActive === true, 'trial isActive true');
+  assert(
+    typeof trialLogin.body.subscription?.daysRemaining === 'number',
+    'trial daysRemaining number'
+  );
+  assert(
+    trialLogin.body.subscription.daysRemaining >= 1,
+    'trial daysRemaining at least 1'
+  );
 
   // Expired business login
   const expiredLogin = await request(app, 'POST', '/api/auth/login', null, {
@@ -194,6 +254,8 @@ async function main() {
   assert(expiredLogin.status === 200, 'expired login should succeed');
   assert(expiredLogin.body.subscription?.status === 'expired', 'expired subscription.status');
   assert(expiredLogin.body.subscription?.isActive === false, 'expired subscription.isActive false');
+  assert(expiredLogin.body.subscription?.effectiveIsActive === false, 'expired effectiveIsActive false');
+  assert(expiredLogin.body.subscription?.daysRemaining === null, 'expired daysRemaining null');
 
   // No subscription business
   const nosubLogin = await request(app, 'POST', '/api/auth/login', null, {
