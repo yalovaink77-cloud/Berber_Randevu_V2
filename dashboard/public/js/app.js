@@ -289,6 +289,7 @@ function switchTab(tabName) {
     loadProfileSettings();
     loadServicesTable();
   } else if (tabName === 'contacts-scanner') {
+    loadCustomers();
     loadScannerContacts();
   }
 }
@@ -1035,6 +1036,107 @@ const MOCK_LOCAL_CONTACTS = [
 ];
 
 let scannerDatabaseContacts = [];
+let customerSearchTimer = null;
+
+function escapeHtml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function formatCustomerPhoneDisplay(phone) {
+  const p = String(phone || '');
+  if (p.startsWith('+90') && p.length === 13) {
+    return `0${p.slice(3, 6)} ${p.slice(6, 9)} ${p.slice(9, 11)} ${p.slice(11)}`;
+  }
+  return p;
+}
+
+function onCustomerSearchInput() {
+  clearTimeout(customerSearchTimer);
+  customerSearchTimer = setTimeout(loadCustomers, 300);
+}
+
+async function loadCustomers() {
+  if (!token) return;
+
+  const loadingEl = document.getElementById('customer-list-loading');
+  const emptyEl = document.getElementById('customer-list-empty');
+  const listEl = document.getElementById('customer-list');
+  const countEl = document.getElementById('customer-count');
+  const searchEl = document.getElementById('customer-search');
+  const q = searchEl ? searchEl.value.trim() : '';
+
+  if (!loadingEl || !emptyEl || !listEl) return;
+
+  loadingEl.style.display = 'block';
+  emptyEl.style.display = 'none';
+  listEl.innerHTML = '';
+  if (countEl) countEl.textContent = '';
+
+  try {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+
+    const url = `${API}/api/customers${params.toString() ? `?${params.toString()}` : ''}`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Müşteriler yüklenemedi');
+    }
+
+    const customers = Array.isArray(data.customers) ? data.customers : [];
+    loadingEl.style.display = 'none';
+
+    if (countEl) {
+      countEl.textContent = customers.length
+        ? `${customers.length} müşteri${q ? ' (filtreli)' : ''}`
+        : '';
+    }
+
+    if (customers.length === 0) {
+      emptyEl.style.display = 'block';
+      emptyEl.innerHTML = q
+        ? '<span style="font-size:28px;display:block;margin-bottom:10px;">🔍</span>Aramanızla eşleşen müşteri bulunamadı.'
+        : '<span style="font-size:28px;display:block;margin-bottom:10px;">👤</span>Henüz müşteri kaydı yok.<br><span style="font-size:12px;margin-top:8px;display:block;line-height:1.5;">Manuel randevu eklediğinizde müşteriler otomatik oluşturulur.</span>';
+      return;
+    }
+
+    renderCustomerList(customers);
+  } catch (e) {
+    loadingEl.style.display = 'none';
+    emptyEl.style.display = 'block';
+    emptyEl.innerHTML = `<span style="color:var(--danger);">Müşteriler yüklenirken hata: ${escapeHtml(e.message)}</span>`;
+  }
+}
+
+function renderCustomerList(customers) {
+  const listEl = document.getElementById('customer-list');
+  if (!listEl) return;
+
+  listEl.innerHTML = customers.map((c) => {
+    const notes = c.notes ? `<div class="customer-row-notes">${escapeHtml(c.notes)}</div>` : '';
+    const email = c.email
+      ? `<div class="customer-row-meta">${escapeHtml(c.email)}</div>`
+      : '';
+
+    return `
+      <div class="customer-row">
+        <div class="customer-row-main">
+          <div class="customer-row-name">${escapeHtml(c.name)}</div>
+          <div class="customer-row-phone">${escapeHtml(formatCustomerPhoneDisplay(c.phone))}</div>
+          ${email}
+          ${notes}
+        </div>
+        <div class="customer-row-badge">${escapeHtml(c.source || 'manual')}</div>
+      </div>
+    `;
+  }).join('');
+}
 
 async function loadScannerContacts() {
   if (!token) return;

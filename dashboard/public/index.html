@@ -377,12 +377,45 @@
 
     </div>
 
-    <!-- TAB CARD 5: CONTACTS SCANNER -->
+    <!-- TAB CARD 5: CUSTOMERS + CONTACTS SCANNER -->
     <div class="tab-content" id="tab-contacts-scanner">
       <div class="date-header" style="margin-bottom:20px;">
         <div class="date-left">
-          <div class="date-big">📇 Akıllı Rehber Tarayıcı & Sınıflandırma</div>
-          <div class="date-sub">Telefon rehberinizi tek tıkla tarayın; Mümtaz Abi gibi eş, dost, akraba ve yakınlarınızı belirleyin!</div>
+          <div class="date-big">👥 İşletme Müşterileri</div>
+          <div class="date-sub">Randevu ve kayıtlarınızdan oluşan tenant müşteri listeniz</div>
+        </div>
+      </div>
+
+      <div class="settings-wrapper customer-panel">
+        <div class="customer-toolbar">
+          <input
+            type="text"
+            id="customer-search"
+            class="customer-search-input"
+            placeholder="İsim veya telefon ara..."
+            oninput="onCustomerSearchInput()"
+            autocomplete="off"
+          />
+          <span id="customer-count" class="customer-count"></span>
+        </div>
+
+        <div id="customer-list-loading" class="loading" style="display:none;">
+          <span class="spinner"></span> Müşteriler yükleniyor...
+        </div>
+
+        <div id="customer-list-empty" class="empty-state customer-empty" style="display:none;"></div>
+
+        <div id="customer-list" class="customer-list"></div>
+      </div>
+
+      <div class="customer-section-divider">
+        <span>Rehber Tarayıcı & Asistan Sınıflandırma</span>
+      </div>
+
+      <div class="date-header" style="margin-bottom:20px; margin-top: 8px;">
+        <div class="date-left">
+          <div class="date-big" style="font-size:22px;">📇 Akıllı Rehber Tarayıcı</div>
+          <div class="date-sub">Telefon rehberinizi tarayın; yakınlarınızı aile/dost olarak işaretleyin</div>
         </div>
       </div>
 
