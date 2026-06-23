@@ -93,6 +93,21 @@ router.get('/', requireBarber, validateQuery(listSchema), async (req, res, next)
   }
 });
 
+router.get('/:id/appointments', requireBarber, async (req, res, next) => {
+  try {
+    const appointments = await customerService.getCustomerAppointmentHistory(
+      req.businessId,
+      req.params.id
+    );
+    res.json({ success: true, appointments });
+  } catch (err) {
+    if (err.status === 404) {
+      return res.status(404).json({ error: err.message || 'Müşteri bulunamadı' });
+    }
+    return next(err);
+  }
+});
+
 router.get('/:id', requireBarber, async (req, res, next) => {
   try {
     const customer = await customerService.getCustomerById(req.businessId, req.params.id);

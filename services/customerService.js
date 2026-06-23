@@ -1,5 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
 const Customer = require('../models/Customer');
+const Appointment = require('../models/Appointment');
 const authService = require('./authService');
 const { requireBusinessId, withBusinessId } = require('../utils/tenant');
 
@@ -207,11 +208,44 @@ async function updateCustomer(businessId, customerId, data = {}) {
   return getCustomerById(tenantId, customerId);
 }
 
+function sanitizeAppointment(doc) {
+  if (!doc) return null;
+  const obj = doc.toObject ? doc.toObject() : { ...doc };
+  delete obj.__v;
+  return obj;
+}
+
+const APPOINTMENT_HISTORY_LIMIT = 10;
+
+/**
+ * Müşterinin son randevularını getirir (customerId veya telefon eşleşmesi).
+ */
+async function getCustomerAppointmentHistory(businessId, customerId) {
+  const tenantId = requireBusinessId(businessId);
+  const customer = await getCustomerById(tenantId, customerId);
+  if (!customer) {
+    const err = new Error('Müşteri bulunamadı');
+    err.status = 404;
+    throw err;
+  }
+
+  const rows = await Appointment.find(
+    withBusinessId(tenantId, {
+      $or: [{ customerId: customer.id }, { customerPhone: customer.phone }],
+    })
+  )
+    .sort({ appointmentDate: -1 })
+    .limit(APPOINTMENT_HISTORY_LIMIT);
+
+  return rows.map((row) => sanitizeAppointment(row));
+}
+
 module.exports = {
   findOrCreateCustomer,
   createCustomer,
   getCustomerById,
   getCustomerByPhone,
+  getCustomerAppointmentHistory,
   listCustomers,
   updateCustomer,
   sanitizeCustomer,

@@ -551,6 +551,16 @@
         <label>Kaynak</label>
         <div id="detail-customer-source" class="customer-detail-value">—</div>
       </div>
+
+      <div class="customer-appointments-section">
+        <div class="customer-appointments-header">Randevu Geçmişi</div>
+        <div id="customer-appointments-loading" class="loading customer-appointments-loading" style="display:none;">
+          <span class="spinner"></span> Randevular yükleniyor...
+        </div>
+        <div id="customer-appointments-error" class="customer-appointments-message customer-appointments-error" style="display:none;"></div>
+        <div id="customer-appointments-empty" class="customer-appointments-message" style="display:none;">Henüz randevu kaydı yok.</div>
+        <div id="customer-appointments-list" class="customer-appointments-list"></div>
+      </div>
     </div>
 
     <div id="customer-detail-edit" class="customer-detail-body" style="display:none;">

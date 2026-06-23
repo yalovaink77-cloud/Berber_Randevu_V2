@@ -1212,6 +1212,93 @@ function cancelCustomerEditMode() {
   setCustomerDetailMode('view');
 }
 
+function resetCustomerAppointments() {
+  const loadingEl = document.getElementById('customer-appointments-loading');
+  const errorEl = document.getElementById('customer-appointments-error');
+  const emptyEl = document.getElementById('customer-appointments-empty');
+  const listEl = document.getElementById('customer-appointments-list');
+
+  if (loadingEl) loadingEl.style.display = 'none';
+  if (errorEl) {
+    errorEl.style.display = 'none';
+    errorEl.textContent = '';
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+  if (listEl) listEl.innerHTML = '';
+}
+
+function renderCustomerAppointments(appointments) {
+  const listEl = document.getElementById('customer-appointments-list');
+  const emptyEl = document.getElementById('customer-appointments-empty');
+  if (!listEl) return;
+
+  if (!appointments.length) {
+    if (emptyEl) emptyEl.style.display = 'block';
+    listEl.innerHTML = '';
+    return;
+  }
+
+  if (emptyEl) emptyEl.style.display = 'none';
+  listEl.innerHTML = appointments.map((a) => {
+    const d = new Date(a.appointmentDate);
+    const dateStr = Number.isNaN(d.getTime())
+      ? '—'
+      : d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' });
+    const timeStr = Number.isNaN(d.getTime())
+      ? '—'
+      : d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+    const svc = services.find((s) => s.code === a.serviceType);
+    const svcName = svc ? svc.name : (a.serviceType || '—');
+    const price = a.price != null && a.price !== '' ? `${a.price} ₺` : '';
+    const statusLabel = STATUS_TR[a.status] || a.status || '—';
+
+    return `
+      <div class="customer-appt-row">
+        <div class="customer-appt-date">${escapeHtml(dateStr)}</div>
+        <div class="customer-appt-time">${escapeHtml(timeStr)}</div>
+        <div class="customer-appt-service">${escapeHtml(svcName)}</div>
+        <span class="status-badge badge-${escapeHtml(a.status || 'pending')}">${escapeHtml(statusLabel)}</span>
+        <div class="customer-appt-price">${escapeHtml(price || '—')}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function loadCustomerAppointments(customerId) {
+  if (!token || !customerId) return;
+
+  const loadingEl = document.getElementById('customer-appointments-loading');
+  const errorEl = document.getElementById('customer-appointments-error');
+  const emptyEl = document.getElementById('customer-appointments-empty');
+  const listEl = document.getElementById('customer-appointments-list');
+
+  resetCustomerAppointments();
+  if (loadingEl) loadingEl.style.display = 'block';
+
+  try {
+    const res = await fetch(
+      `${API}/api/customers/${encodeURIComponent(customerId)}/appointments`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Randevu geçmişi yüklenemedi');
+    }
+
+    const appointments = Array.isArray(data.appointments) ? data.appointments : [];
+    if (loadingEl) loadingEl.style.display = 'none';
+    renderCustomerAppointments(appointments);
+  } catch (e) {
+    if (loadingEl) loadingEl.style.display = 'none';
+    if (errorEl) {
+      errorEl.textContent = e.message;
+      errorEl.style.display = 'block';
+    }
+    if (listEl) listEl.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = 'none';
+  }
+}
+
 async function saveCustomerDetail() {
   if (!token || !customerDetailState.id) return;
 
@@ -1262,6 +1349,7 @@ async function saveCustomerDetail() {
     populateCustomerDetailView(data.customer);
     setCustomerDetailMode('view');
     await loadCustomers();
+    await loadCustomerAppointments(customerDetailState.id);
   } catch (e) {
     showCustomerDetailError(e.message);
   } finally {
@@ -1290,6 +1378,9 @@ async function openCustomerDetail(customerId) {
   if (actionsView) actionsView.style.display = 'none';
   if (actionsEdit) actionsEdit.style.display = 'none';
   clearCustomerDetailError();
+  resetCustomerAppointments();
+
+  loadCustomerAppointments(customerId);
 
   try {
     const res = await fetch(`${API}/api/customers/${encodeURIComponent(customerId)}`, {
