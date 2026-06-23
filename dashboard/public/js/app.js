@@ -105,6 +105,8 @@ try {
   console.error("Kullanıcı verisi ayrıştırılamadı:", e);
 }
 let services = [];
+let dashboardStatsLoadedFromApi = false;
+let lastBarberAppointments = [];
 let editingAppointmentId = null;
 
 if(token && currentUser) {
@@ -234,7 +236,7 @@ async function showDashboard(){
   updateDateHeader(new Date());
   
   await loadServices();
-  await loadAppointments();
+  await Promise.all([loadDashboardStats(), loadAppointments()]);
   await loadProfileSettings();
   await loadMissedCalls();
   
@@ -276,6 +278,7 @@ function switchTab(tabName) {
   if (navBtn) navBtn.classList.add('active');
   
   if (tabName === 'calendar') {
+    loadDashboardStats();
     loadAppointments();
     loadMissedCalls();
   } else if (tabName === 'missed') {
@@ -345,6 +348,79 @@ function changeDay(delta){
   loadAppointments();
 }
 
+function applyDashboardStats(stats) {
+  const totalEl = document.getElementById('stat-total');
+  const completedEl = document.getElementById('stat-completed');
+  const upcomingEl = document.getElementById('stat-upcoming');
+  const revenueEl = document.getElementById('stat-revenue');
+  const customersEl = document.getElementById('stat-customers');
+
+  if (totalEl) totalEl.textContent = stats.todayAppointments ?? 0;
+  if (completedEl) completedEl.textContent = stats.todayCompletedAppointments ?? 0;
+  if (upcomingEl) upcomingEl.textContent = stats.upcomingAppointments ?? 0;
+  if (revenueEl) revenueEl.textContent = `${stats.todayActualRevenue ?? 0} ₺`;
+  if (customersEl) {
+    customersEl.textContent = stats.totalCustomers != null ? stats.totalCustomers : '—';
+  }
+}
+
+function applyDashboardStatsFallback(all) {
+  const today = todayStr();
+  const dayStart = new Date(`${today}T00:00:00`);
+  const dayEnd = new Date(`${today}T23:59:59`);
+
+  const todayAppts = all.filter((a) => {
+    const d = new Date(a.appointmentDate);
+    return d >= dayStart && d <= dayEnd;
+  });
+
+  const upcoming = all.filter((a) => {
+    const d = new Date(a.appointmentDate);
+    return d >= dayStart && ['pending', 'confirmed'].includes(a.status);
+  });
+
+  applyDashboardStats({
+    todayAppointments: todayAppts.length,
+    todayCompletedAppointments: todayAppts.filter((a) => a.status === 'completed').length,
+    todayUpcomingAppointments: todayAppts.filter((a) => ['pending', 'confirmed'].includes(a.status)).length,
+    todayActualRevenue: todayAppts
+      .filter((a) => a.status === 'completed' && a.price != null && a.price > 0)
+      .reduce((s, a) => s + (a.price || 0), 0),
+    totalCustomers: null,
+    upcomingAppointments: upcoming.length,
+  });
+}
+
+async function loadDashboardStats() {
+  if (!token) return;
+
+  ['stat-total', 'stat-completed', 'stat-upcoming', 'stat-revenue', 'stat-customers'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = '—';
+  });
+
+  try {
+    const res = await fetch(`${API}/api/dashboard/stats`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.status === 401) {
+      doLogout();
+      return;
+    }
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'KPI verileri yüklenemedi');
+    }
+    dashboardStatsLoadedFromApi = true;
+    applyDashboardStats(data.stats || {});
+  } catch (e) {
+    dashboardStatsLoadedFromApi = false;
+    if (lastBarberAppointments.length) {
+      applyDashboardStatsFallback(lastBarberAppointments);
+    }
+  }
+}
+
 async function loadAppointments(){
   if (!token) return;
   const picker=document.getElementById('date-picker');
@@ -352,10 +428,6 @@ async function loadAppointments(){
   updateDateHeader(date);
   const container=document.getElementById('appointments-container');
   container.innerHTML='<div class="loading"><span class="spinner"></span> Randevular yükleniyor...</div>';
-  ['stat-total','stat-confirmed','stat-pending','stat-revenue'].forEach(id=> {
-    const el = document.getElementById(id);
-    if(el) el.textContent='—';
-  });
 
   try{
     const res=await fetch(`${API}/api/appointments/barber/${currentUser.id}`,{
@@ -363,6 +435,10 @@ async function loadAppointments(){
     });
     if(res.status===401){doLogout();return;}
     const all=await res.json();
+    lastBarberAppointments=Array.isArray(all)?all:[];
+    if(!dashboardStatsLoadedFromApi){
+      applyDashboardStatsFallback(lastBarberAppointments);
+    }
     const dayStart=new Date(picker.value+'T00:00:00');
     const dayEnd=new Date(picker.value+'T23:59:59');
     
@@ -371,16 +447,6 @@ async function loadAppointments(){
       return d>=dayStart&&d<=dayEnd;
     }).sort((a,b)=>new Date(a.appointmentDate)-new Date(b.appointmentDate));
 
-    const total=appts.length;
-    const confirmed=appts.filter(a=>a.status==='confirmed').length;
-    const pending=appts.filter(a=>a.status==='pending').length;
-    const revenue=appts.filter(a=>a.status!=='cancelled').reduce((s,a)=>s+(a.price||0),0);
-    
-    document.getElementById('stat-total').textContent=total;
-    document.getElementById('stat-confirmed').textContent=confirmed;
-    document.getElementById('stat-pending').textContent=pending;
-    document.getElementById('stat-revenue').textContent=revenue + ' ₺';
-    
     if(!appts.length){
       container.innerHTML='<div class="empty-state">Bu tarih için planlanmış randevu bulunmuyor.</div>';
       return;
@@ -424,6 +490,7 @@ async function quickStatus(id,status){
     });
     if(res.ok) {
        loadAppointments();
+       loadDashboardStats();
     }
   }catch(e){
     alert('Güncelleme hatası: '+e.message);
@@ -439,6 +506,7 @@ async function cancelAppointment(id){
     });
     if(res.ok) {
       loadAppointments();
+      loadDashboardStats();
     }
   }catch(e){
     alert('İptal hatası: '+e.message);
@@ -507,6 +575,7 @@ async function saveNewAppointment(){
     }
     closeModal('modal-new');
     loadAppointments();
+    loadDashboardStats();
   }catch(e){
     err.textContent=e.message;err.style.display='block';
   }
@@ -534,6 +603,7 @@ async function saveStatusUpdate(){
     if(res.ok){
       closeModal('modal-status');
       loadAppointments();
+      loadDashboardStats();
     }
   }catch(e){
     alert('Güncelleme hatası: '+e.message);

@@ -56,7 +56,7 @@
   .btn-new:hover{background:var(--gold-bright);}
 
   /* METRICS */
-  .summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:36px;}
+  .summary-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-bottom:36px;}
   .summary-card{background:var(--surface);border:1px solid var(--border);padding:24px 20px;border-radius:4px;}
   .summary-label{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:10px;}
   .summary-value{font-family:'Playfair Display',serif;font-size:32px;color:var(--gold);font-weight:700;}

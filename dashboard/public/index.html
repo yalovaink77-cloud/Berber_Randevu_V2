@@ -101,11 +101,12 @@
         <button class="btn-new" onclick="openNewModal()">+ Manuel Randevu Ekle</button>
       </div>
 
-      <div class="summary-grid">
-        <div class="summary-card"><div class="summary-label">Toplam Randevu</div><div class="summary-value" id="stat-total">—</div><div class="summary-unit">bugün</div></div>
-        <div class="summary-card"><div class="summary-label">Onaylanan</div><div class="summary-value" id="stat-confirmed">—</div><div class="summary-unit">seans</div></div>
-        <div class="summary-card"><div class="summary-label">Bekleyen</div><div class="summary-value" id="stat-pending">—</div><div class="summary-unit">onay bekliyor</div></div>
-        <div class="summary-card"><div class="summary-label">Tahmini Gelir</div><div class="summary-value" id="stat-revenue">—</div><div class="summary-unit">TL</div></div>
+      <div class="summary-grid" id="summary-grid">
+        <div class="summary-card"><div class="summary-label">Bugünkü Randevu</div><div class="summary-value" id="stat-total">—</div><div class="summary-unit">bugün</div></div>
+        <div class="summary-card"><div class="summary-label">Tamamlanan</div><div class="summary-value" id="stat-completed">—</div><div class="summary-unit">bugün</div></div>
+        <div class="summary-card"><div class="summary-label">Yaklaşan</div><div class="summary-value" id="stat-upcoming">—</div><div class="summary-unit">aktif randevu</div></div>
+        <div class="summary-card"><div class="summary-label">Gerçekleşen Gelir</div><div class="summary-value" id="stat-revenue">—</div><div class="summary-unit">TL · bugün</div></div>
+        <div class="summary-card"><div class="summary-label">Toplam Müşteri</div><div class="summary-value" id="stat-customers">—</div><div class="summary-unit">kayıtlı</div></div>
       </div>
 
       <div class="calendar-section">

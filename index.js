@@ -9,6 +9,7 @@ const authRoutes = require('./dashboard/authRoutes');
 const assistantRoutes = require('./dashboard/assistantRoutes');
 const businessRoutes = require('./dashboard/businessRoutes');
 const customerRoutes = require('./dashboard/customerRoutes');
+const dashboardRoutes = require('./dashboard/dashboardRoutes');
 const deviceRoutes = require('./dashboard/deviceRoutes');
 const path = require('path');
 const { authenticate } = require('./middleware/auth');
@@ -84,6 +85,7 @@ app.use('/api/services', authenticate, serviceRoutes);
 app.use('/api/assistant', authenticate, assistantRoutes);
 app.use('/api/business', authenticate, businessRoutes);
 app.use('/api/customers', authenticate, customerRoutes);
+app.use('/api/dashboard', authenticate, dashboardRoutes);
 app.use('/api/device', deviceRoutes);
 
 // ─── WhatsApp Webhook ─────────────────────────────────────────────────────
