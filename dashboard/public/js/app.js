@@ -1114,6 +1114,204 @@ async function loadCustomers() {
   }
 }
 
+function formatCustomerSource(source) {
+  const labels = {
+    manual: 'Manuel',
+    whatsapp: 'WhatsApp',
+    import: 'İçe aktarma',
+    appointment: 'Randevu',
+  };
+  return labels[source] || source || '—';
+}
+
+const customerDetailState = {
+  id: null,
+  customer: null,
+  mode: 'view',
+};
+
+function clearCustomerDetailError() {
+  const errorEl = document.getElementById('customer-detail-error');
+  if (!errorEl) return;
+  errorEl.style.display = 'none';
+  errorEl.textContent = '';
+}
+
+function showCustomerDetailError(message) {
+  const errorEl = document.getElementById('customer-detail-error');
+  if (!errorEl) return;
+  errorEl.textContent = message;
+  errorEl.style.display = 'block';
+}
+
+function setCustomerDetailField(id, value, emptyLabel) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const text = value != null && String(value).trim() !== '' ? String(value).trim() : '';
+  el.textContent = text || emptyLabel || '—';
+  el.classList.toggle('customer-detail-empty', !text);
+}
+
+function populateCustomerDetailView(c) {
+  if (!c) return;
+  setCustomerDetailField('detail-customer-name', c.name);
+  setCustomerDetailField(
+    'detail-customer-phone',
+    c.phone ? formatCustomerPhoneDisplay(c.phone) : ''
+  );
+  setCustomerDetailField('detail-customer-email', c.email, 'Belirtilmemiş');
+  setCustomerDetailField('detail-customer-notes', c.notes, 'Not yok');
+  setCustomerDetailField('detail-customer-source', formatCustomerSource(c.source));
+}
+
+function populateCustomerDetailEdit(c) {
+  const nameEl = document.getElementById('edit-customer-name');
+  const phoneEl = document.getElementById('edit-customer-phone');
+  const emailEl = document.getElementById('edit-customer-email');
+  const notesEl = document.getElementById('edit-customer-notes');
+  if (!nameEl || !phoneEl || !emailEl || !notesEl) return;
+
+  nameEl.value = c?.name || '';
+  phoneEl.value = c?.phone ? formatCustomerPhoneDisplay(c.phone) : '';
+  emailEl.value = c?.email || '';
+  notesEl.value = c?.notes || '';
+}
+
+function setCustomerDetailMode(mode) {
+  customerDetailState.mode = mode;
+
+  const viewEl = document.getElementById('customer-detail-view');
+  const editEl = document.getElementById('customer-detail-edit');
+  const actionsView = document.getElementById('customer-detail-actions-view');
+  const actionsEdit = document.getElementById('customer-detail-actions-edit');
+  const titleEl = document.getElementById('customer-detail-title');
+
+  if (viewEl) viewEl.style.display = mode === 'view' ? 'block' : 'none';
+  if (editEl) editEl.style.display = mode === 'edit' ? 'block' : 'none';
+  if (actionsView) actionsView.style.display = mode === 'view' ? 'flex' : 'none';
+  if (actionsEdit) actionsEdit.style.display = mode === 'edit' ? 'flex' : 'none';
+  if (titleEl) titleEl.textContent = mode === 'edit' ? 'Müşteri Düzenle' : 'Müşteri Detayı';
+}
+
+function closeCustomerDetailModal() {
+  setCustomerDetailMode('view');
+  clearCustomerDetailError();
+  closeModal('modal-customer-detail');
+}
+
+function enterCustomerEditMode() {
+  if (!customerDetailState.customer) return;
+  populateCustomerDetailEdit(customerDetailState.customer);
+  clearCustomerDetailError();
+  setCustomerDetailMode('edit');
+  document.getElementById('edit-customer-name')?.focus();
+}
+
+function cancelCustomerEditMode() {
+  clearCustomerDetailError();
+  setCustomerDetailMode('view');
+}
+
+async function saveCustomerDetail() {
+  if (!token || !customerDetailState.id) return;
+
+  const saveBtn = document.getElementById('btn-customer-save');
+  const name = document.getElementById('edit-customer-name')?.value.trim() || '';
+  const phone = document.getElementById('edit-customer-phone')?.value.trim() || '';
+  const email = document.getElementById('edit-customer-email')?.value.trim() || '';
+  const notes = document.getElementById('edit-customer-notes')?.value.trim() || '';
+
+  clearCustomerDetailError();
+
+  if (name.length < 2) {
+    showCustomerDetailError('Ad soyad en az 2 karakter olmalıdır.');
+    return;
+  }
+  if (phone.length < 8) {
+    showCustomerDetailError('Geçerli bir telefon numarası girin.');
+    return;
+  }
+
+  if (saveBtn) saveBtn.disabled = true;
+
+  try {
+    const res = await fetch(`${API}/api/customers/${encodeURIComponent(customerDetailState.id)}`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name, phone, email, notes }),
+    });
+    const data = await res.json();
+
+    if (res.status === 409) {
+      showCustomerDetailError(data.error || 'Bu telefon numarası bu işletmede zaten kayıtlı');
+      return;
+    }
+    if (res.status === 403) {
+      showCustomerDetailError(data.error || 'Bu işlem için aktif abonelik gerekli');
+      return;
+    }
+    if (!res.ok) {
+      const detail = Array.isArray(data.details) ? data.details.join(' ') : '';
+      throw new Error(data.error ? `${data.error}${detail ? ` ${detail}` : ''}` : 'Güncelleme başarısız');
+    }
+
+    customerDetailState.customer = data.customer;
+    populateCustomerDetailView(data.customer);
+    setCustomerDetailMode('view');
+    await loadCustomers();
+  } catch (e) {
+    showCustomerDetailError(e.message);
+  } finally {
+    if (saveBtn) saveBtn.disabled = false;
+  }
+}
+
+async function openCustomerDetail(customerId) {
+  if (!token || !customerId) return;
+
+  const loadingEl = document.getElementById('customer-detail-loading');
+  const viewEl = document.getElementById('customer-detail-view');
+  const editEl = document.getElementById('customer-detail-edit');
+  const actionsView = document.getElementById('customer-detail-actions-view');
+  const actionsEdit = document.getElementById('customer-detail-actions-edit');
+
+  customerDetailState.id = customerId;
+  customerDetailState.customer = null;
+  setCustomerDetailMode('view');
+
+  openModal('modal-customer-detail');
+
+  if (loadingEl) loadingEl.style.display = 'block';
+  if (viewEl) viewEl.style.display = 'none';
+  if (editEl) editEl.style.display = 'none';
+  if (actionsView) actionsView.style.display = 'none';
+  if (actionsEdit) actionsEdit.style.display = 'none';
+  clearCustomerDetailError();
+
+  try {
+    const res = await fetch(`${API}/api/customers/${encodeURIComponent(customerId)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Müşteri yüklenemedi');
+    }
+
+    customerDetailState.customer = data.customer;
+    populateCustomerDetailView(data.customer);
+
+    if (loadingEl) loadingEl.style.display = 'none';
+    if (viewEl) viewEl.style.display = 'block';
+    if (actionsView) actionsView.style.display = 'flex';
+  } catch (e) {
+    if (loadingEl) loadingEl.style.display = 'none';
+    showCustomerDetailError(e.message);
+  }
+}
+
 function renderCustomerList(customers) {
   const listEl = document.getElementById('customer-list');
   if (!listEl) return;
@@ -1125,7 +1323,7 @@ function renderCustomerList(customers) {
       : '';
 
     return `
-      <div class="customer-row">
+      <div class="customer-row customer-row-clickable" role="button" tabindex="0" onclick="openCustomerDetail('${escapeHtml(c.id)}')" onkeydown="if(event.key==='Enter'||event.key===' ')openCustomerDetail('${escapeHtml(c.id)}')">
         <div class="customer-row-main">
           <div class="customer-row-name">${escapeHtml(c.name)}</div>
           <div class="customer-row-phone">${escapeHtml(formatCustomerPhoneDisplay(c.phone))}</div>

@@ -520,6 +520,69 @@
   </div>
 </div>
 
+<!-- MÜŞTERİ DETAY / DÜZENLE MODAL -->
+<div class="modal-overlay" id="modal-customer-detail">
+  <div class="modal modal-customer-detail">
+    <div class="modal-title" id="customer-detail-title">Müşteri Detayı</div>
+
+    <div id="customer-detail-loading" class="loading" style="display:none;">
+      <span class="spinner"></span> Müşteri bilgileri yükleniyor...
+    </div>
+    <div id="customer-detail-error" class="error-msg" style="display:none;color:var(--danger);font-size:13px;margin-bottom:16px;"></div>
+
+    <div id="customer-detail-view" class="customer-detail-body" style="display:none;">
+      <div class="customer-detail-item">
+        <label>Ad Soyad</label>
+        <div id="detail-customer-name" class="customer-detail-value">—</div>
+      </div>
+      <div class="customer-detail-item">
+        <label>Telefon</label>
+        <div id="detail-customer-phone" class="customer-detail-value customer-detail-phone">—</div>
+      </div>
+      <div class="customer-detail-item">
+        <label>E-posta</label>
+        <div id="detail-customer-email" class="customer-detail-value">—</div>
+      </div>
+      <div class="customer-detail-item">
+        <label>Notlar</label>
+        <div id="detail-customer-notes" class="customer-detail-value customer-detail-notes">—</div>
+      </div>
+      <div class="customer-detail-item">
+        <label>Kaynak</label>
+        <div id="detail-customer-source" class="customer-detail-value">—</div>
+      </div>
+    </div>
+
+    <div id="customer-detail-edit" class="customer-detail-body" style="display:none;">
+      <div class="field">
+        <label for="edit-customer-name">Ad Soyad</label>
+        <input type="text" id="edit-customer-name" autocomplete="name" placeholder="Ahmet Yılmaz"/>
+      </div>
+      <div class="field">
+        <label for="edit-customer-phone">Telefon</label>
+        <input type="text" id="edit-customer-phone" inputmode="tel" autocomplete="tel" placeholder="0535 111 22 33"/>
+      </div>
+      <div class="field">
+        <label for="edit-customer-email">E-posta</label>
+        <input type="email" id="edit-customer-email" autocomplete="email" placeholder="ornek@mail.com"/>
+      </div>
+      <div class="field">
+        <label for="edit-customer-notes">Notlar</label>
+        <textarea id="edit-customer-notes" placeholder="Müşteri hakkında notlar..."></textarea>
+      </div>
+    </div>
+
+    <div class="modal-actions" id="customer-detail-actions-view" style="display:none;">
+      <button type="button" class="btn-modal-edit" onclick="enterCustomerEditMode()">Düzenle</button>
+      <button type="button" class="btn-modal-cancel" onclick="closeCustomerDetailModal()">Kapat</button>
+    </div>
+    <div class="modal-actions" id="customer-detail-actions-edit" style="display:none;">
+      <button type="button" class="btn-modal-cancel" onclick="cancelCustomerEditMode()">İptal</button>
+      <button type="button" class="btn-modal-save" id="btn-customer-save" onclick="saveCustomerDetail()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
 <!-- YENİ RANDEVU MODAL -->
 <div class="modal-overlay" id="modal-new">
   <div class="modal">
